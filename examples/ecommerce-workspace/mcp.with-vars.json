@@ -1,0 +1,19 @@
+{
+  "servers": {
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y", 
+        "@playwright/mcp@latest",
+        "--browser", "chrome",
+        "--no-sandbox"
+      ],
+      "enabled": true,
+      "description": "Playwright 浏览器自动化，使用工作区 Profile",
+      "env": {
+        "PLAYWRIGHT_USER_DATA_DIR": "{{workspaceDir}}/browser-profile"
+      }
+    }
+  }
+}

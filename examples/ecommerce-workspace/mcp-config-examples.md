@@ -67,7 +67,7 @@
 
 ## 浏览器 Profile 配置
 
-**文件**: `mcp.with-profile.json`
+**文件**: `mcp.with-vars.json`（推荐）
 
 保存登录状态，避免每次都重新登录：
 
@@ -86,14 +86,47 @@
       "enabled": true,
       "description": "Playwright 浏览器自动化，持久化登录状态",
       "env": {
-        "PLAYWRIGHT_USER_DATA_DIR": "{{workspace_dir}}/browser-profile"
+        "PLAYWRIGHT_USER_DATA_DIR": "{{workspaceDir}}/browser-profile"
       }
     }
   }
 }
 ```
 
-注意：环境变量需要在 Proma 代码中特殊处理，或者使用绝对路径。
+### 支持的路径变量
+
+Proma 支持在 MCP 配置中使用路径变量，这样你不需要写死绝对路径：
+
+| 变量 | 说明 |
+|------|------|
+| `{{workspaceDir}}` | 当前工作区的绝对路径 |
+| `{{workspaceSlug}}` | 当前工作区的唯一标识符 |
+
+### 工作原理
+
+每个工作区的 `mcp.json` 都会被 Proma 独立加载：
+- 打开店铺 A → 加载 `~/.proma/agent-workspaces/pdd-store-a/mcp.json`
+- `{{workspaceDir}}` 自动替换为 `~/.proma/agent-workspaces/pdd-store-a`
+- `browser-profile` 目录就变成了 `~/.proma/agent-workspaces/pdd-store-a/browser-profile`
+- 店铺 A 的登录状态只会保存在这个目录里
+
+### 完全隔离
+
+店铺 A 的 MCP 配置和浏览器 Profile：
+```
+~/.proma/agent-workspaces/pdd-store-a/
+├── mcp.json          → 配置指向 {{workspaceDir}}/browser-profile
+└── browser-profile/  → 店铺 A 的登录 Cookie
+```
+
+店铺 B 的 MCP 配置和浏览器 Profile：
+```
+~/.proma/agent-workspaces/pdd-store-b/
+├── mcp.json          → 配置指向 {{workspaceDir}}/browser-profile
+└── browser-profile/  → 店铺 B 的登录 Cookie
+```
+
+两个工作区互不干扰！
 
 ---
 

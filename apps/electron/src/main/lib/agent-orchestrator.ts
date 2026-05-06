@@ -491,10 +491,21 @@ export class AgentOrchestrator {
 
   /**
    * 构建工作区 MCP 服务器配置
+   * 支持路径变量替换：
+   * - {{workspaceDir}} → 当前工作区目录
    */
   private buildMcpServers(workspaceSlug: string | undefined): Record<string, Record<string, unknown>> {
     const mcpServers: Record<string, Record<string, unknown>> = {}
     if (!workspaceSlug) return mcpServers
+
+    const workspacePath = getAgentWorkspacePath(workspaceSlug)
+    
+    // 路径变量替换函数
+    const replacePathVars = (value: string): string => {
+      return value
+        .replace(/\{\{workspaceDir\}\}/g, workspacePath)
+        .replace(/\{\{workspaceSlug\}\}/g, workspaceSlug)
+    }
 
     const mcpConfig = getWorkspaceMcpConfig(workspaceSlug)
     for (const [name, entry] of Object.entries(mcpConfig.servers ?? {})) {
@@ -502,22 +513,35 @@ export class AgentOrchestrator {
       if (name === 'memos-cloud') continue
 
       if (entry.type === 'stdio' && entry.command) {
+        // 替换环境变量中的路径变量
+        const processedEnv: Record<string, string> = {}
+        if (entry.env) {
+          for (const [key, value] of Object.entries(entry.env)) {
+            processedEnv[key] = replacePathVars(value)
+          }
+        }
+        
         const mergedEnv: Record<string, string> = {
           ...(process.env.PATH && { PATH: process.env.PATH }),
-          ...entry.env,
+          ...processedEnv,
         }
+        
+        // 替换 args 中的路径变量
+        const processedArgs = entry.args?.map(replacePathVars)
+        
         mcpServers[name] = {
           type: 'stdio',
           command: entry.command,
-          ...(entry.args && entry.args.length > 0 && { args: entry.args }),
+          ...(processedArgs && processedArgs.length > 0 && { args: processedArgs }),
           ...(Object.keys(mergedEnv).length > 0 && { env: mergedEnv }),
           required: false,
           startup_timeout_sec: entry.timeout ?? 30,
         }
       } else if ((entry.type === 'http' || entry.type === 'sse') && entry.url) {
+        // 替换 URL 中的路径变量
         mcpServers[name] = {
           type: entry.type,
-          url: entry.url,
+          url: replacePathVars(entry.url),
           ...(entry.headers && Object.keys(entry.headers).length > 0 && { headers: entry.headers }),
           required: false,
         }
