@@ -3,11 +3,14 @@
     "playwright": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@playwright/mcp@latest"],
+      "args": [
+        "-y", 
+        "@playwright/mcp@latest",
+        "--browser", "chrome",
+        "--no-sandbox"
+      ],
       "enabled": true,
-      "env": {
-        "PLAYWRIGHT_BROWSERS_PATH": "0"
-      }
+      "description": "Playwright 浏览器自动化，用于电商操作"
     }
   }
 }
