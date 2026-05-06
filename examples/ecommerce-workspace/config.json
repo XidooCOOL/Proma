@@ -1,0 +1,19 @@
+{
+  "name": "拼多多店铺 A",
+  "platform": "pinduoduo",
+  "description": "拼多多电商自动化工作区",
+  "browser": {
+    "profilePath": "browser-profile",
+    "defaultViewport": {
+      "width": 1920,
+      "height": 1080
+    },
+    "headless": false
+  },
+  "ecommerce": {
+    "storeId": "your-store-id",
+    "defaultCurrency": "CNY",
+    "autoBackup": true,
+    "backupInterval": 86400000
+  }
+}
