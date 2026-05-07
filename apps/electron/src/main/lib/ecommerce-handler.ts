@@ -2,6 +2,25 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { app } from 'electron'
 import { randomUUID } from 'crypto'
+import {
+  type StoreProfile,
+  type ListingRecord,
+  type TaskLog,
+  type TaskItems,
+  type ListingTask,
+  type ListingResult,
+  type TaskProgress,
+  type Platform,
+  type ExtractMode,
+  type SelectorCategory,
+  type SelectorDefinition,
+  type SelectorConfig as PlatformSelectorConfig,
+  type PlatformSelectors,
+  type EcommerceError,
+  ERROR_CODES,
+  createEcommerceError,
+  isEcommerceError,
+} from './ecommerce-types'
 
 const ECOMMERCE_DIR = path.join(app.getPath('userData'), 'ecommerce')
 
@@ -11,49 +30,6 @@ const PATHS = {
   selectors: path.join(ECOMMERCE_DIR, 'selectors'),
   records: path.join(ECOMMERCE_DIR, 'records'),
   logs: path.join(ECOMMERCE_DIR, 'logs'),
-}
-
-export interface StoreProfile {
-  id: string
-  name: string
-  platform: string
-  createdAt: string
-  lastUsedAt: string
-  stats: { totalProducts: number; totalOrders: number; lastUploadAt?: string }
-}
-
-export interface SelectorConfig {
-  platform: string
-  page: string
-  version: number
-  elements: Record<string, string>
-  updatedAt: string
-}
-
-export interface ListingRecord {
-  id: string
-  profileId: string
-  folderName: string
-  title: string
-  price: number
-  images: string[]
-  status: 'pending' | 'uploading' | 'success' | 'failed'
-  uploadedAt: string
-  productUrl?: string
-  productId?: string
-  error?: string
-}
-
-export interface TaskLog {
-  id: string
-  type: 'listing' | 'update' | 'scrape'
-  profileId?: string
-  startedAt: string
-  finishedAt?: string
-  status: 'running' | 'completed' | 'failed' | 'cancelled'
-  progress: number
-  items: { total: number; success: number; failed: number }
-  error?: string
 }
 
 function ensureDir(dir: string): void {

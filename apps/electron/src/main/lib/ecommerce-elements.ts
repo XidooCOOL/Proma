@@ -1,3 +1,39 @@
+export {
+  type Platform,
+  type ExtractMode,
+  type TaskStatus,
+  type ListingStatus,
+  type SelectorCategory,
+  type StoreProfile,
+  type ProfileStats,
+  type SelectorDefinition,
+  type SelectorConfig,
+  type PlatformSelectors,
+  type ListingRecord,
+  type TaskLog,
+  type TaskItems,
+  type ListingTask,
+  type SKU,
+  type ListingResult,
+  type TaskProgress,
+  type TaskGroup,
+  type TaskItem,
+  type CategoryInfo,
+  type PlatformInfo,
+  type EcommerceError,
+  PLATFORM_CONFIG,
+  PLATFORM_LIST,
+  CATEGORY_CONFIG,
+  CATEGORIES,
+  DEFAULT_TEST_URLS,
+  DEFAULT_PRODUCT_DETAIL_URLS,
+  EXTRACT_MODE_LABELS,
+  STATUS_LABELS,
+  ERROR_CODES,
+  createEcommerceError,
+  isEcommerceError,
+} from './ecommerce-types'
+
 export const EXTRACT_MODE = {
   ELEMENT: 'element',
   TEXT: 'text',
@@ -8,43 +44,28 @@ export const EXTRACT_MODE = {
   INNER_HTML: 'innerHTML',
 } as const
 
-export type ExtractMode = typeof EXTRACT_MODE[keyof typeof EXTRACT_MODE]
+export type ExtractModeType = typeof EXTRACT_MODE[keyof typeof EXTRACT_MODE]
 
-export interface SelectorDefinition {
+export interface SelectorDefinitionLocal {
   id: string
   category: 'product_info' | 'form_input' | 'action' | 'upload' | 'result'
   label: string
   labelZh: string
   description: string
-  extractMode: ExtractMode
+  extractMode: string
   attributes?: string[]
 }
 
-export interface SelectorConfig {
+export interface SelectorConfigLocal {
   id: string
   selector: string
-  extractMode: ExtractMode
+  extractMode: string
   attributes?: string[]
   enabled: boolean
   lastTested?: string
 }
 
-export interface PlatformSelectors {
-  platform: string
-  version: string
-  updatedAt: string
-  selectors: Record<string, SelectorConfig>
-}
-
-export const CATEGORIES = [
-  { id: 'product_info', label: 'Product Info', labelZh: '商品信息' },
-  { id: 'form_input', label: 'Form Input', labelZh: '表单输入' },
-  { id: 'action', label: 'Action', labelZh: '操作按钮' },
-  { id: 'upload', label: 'Upload', labelZh: '上传区域' },
-  { id: 'result', label: 'Result', labelZh: '结果反馈' },
-] as const
-
-export const PREDEFINED_SELECTORS: SelectorDefinition[] = [
+export const PREDEFINED_SELECTORS: SelectorDefinitionLocal[] = [
   { id: 'product_id', category: 'product_info', label: 'Product ID', labelZh: '商品ID', description: '商品唯一标识符', extractMode: 'data-id', attributes: ['data-product-id', 'data-goods-id', 'data-item-id'] },
   { id: 'product_title', category: 'product_info', label: 'Product Title', labelZh: '商品标题', description: '商品显示标题', extractMode: 'text' },
   { id: 'product_url', category: 'product_info', label: 'Product URL', labelZh: '商品链接', description: '商品详情页链接', extractMode: 'href' },
@@ -77,16 +98,16 @@ export const PREDEFINED_SELECTORS: SelectorDefinition[] = [
   { id: 'modal_error', category: 'result', label: 'Error Modal', labelZh: '错误弹窗', description: '错误信息弹窗', extractMode: 'innerHTML' },
 ]
 
-export function getSelectorById(id: string): SelectorDefinition | undefined {
+export function getSelectorById(id: string): SelectorDefinitionLocal | undefined {
   return PREDEFINED_SELECTORS.find(s => s.id === id)
 }
 
-export function getSelectorsByCategory(category: string): SelectorDefinition[] {
+export function getSelectorsByCategory(category: string): SelectorDefinitionLocal[] {
   return PREDEFINED_SELECTORS.filter(s => s.category === category)
 }
 
-export function createEmptyPlatformSelectors(platform: string): PlatformSelectors {
-  const selectors: Record<string, SelectorConfig> = {}
+export function createEmptyPlatformSelectors(platform: string): { platform: string; version: string; updatedAt: string; selectors: Record<string, SelectorConfigLocal> } {
+  const selectors: Record<string, SelectorConfigLocal> = {}
   for (const def of PREDEFINED_SELECTORS) {
     selectors[def.id] = {
       id: def.id,
@@ -105,22 +126,12 @@ export function createEmptyPlatformSelectors(platform: string): PlatformSelector
 }
 
 export function getCategoryLabel(category: string): string {
-  const cat = CATEGORIES.find(c => c.id === category)
-  return cat?.labelZh || category
-}
-
-export const PLATFORM_LIST = [
-  { id: 'pinduoduo', label: '拼多多' },
-  { id: 'douyin', label: '抖音' },
-  { id: 'taobao', label: '淘宝' },
-  { id: 'jd', label: '京东' },
-  { id: 'kuaishou', label: '快手' },
-]
-
-export const DEFAULT_TEST_URLS: Record<string, string> = {
-  pinduoduo: 'https://mms.pinduoduo.com/goods/list',
-  douyin: 'https://creator.douyin.com/product/list',
-  taobao: 'https://upload.taobao.com/',
-  jd: 'https://seller.jd.com/商品管理',
-  kuaishou: 'https://cp.kwaixiandian.com/goods/list',
+  const labels: Record<string, string> = {
+    product_info: '商品信息',
+    form_input: '表单输入',
+    action: '操作按钮',
+    upload: '上传区域',
+    result: '结果反馈',
+  }
+  return labels[category] || category
 }
