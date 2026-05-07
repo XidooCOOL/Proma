@@ -9,7 +9,9 @@
     "start": "node dist/mcp-server.js",
     "dev": "tsx src/mcp-server.ts",
     "example": "tsx src/example.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "setup": "node install.js",
+    "auto": "node auto-start.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.0",
