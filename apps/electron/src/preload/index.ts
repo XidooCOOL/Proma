@@ -879,6 +879,38 @@ export interface ElectronAPI {
 
   /** 批量检测页面改版 - 检查选择器是否失效 */
   detectBrokenSelectors: (platform: string, pages: string[]) => Promise<string[]>
+
+  // ===== 店铺 Profile 管理 =====
+
+  /** 获取店铺 Profile 列表 */
+  getStoreProfiles: () => Promise<Array<{ id: string; name: string; platform: string; status: string; loggedIn: boolean }>>
+
+  /** 创建店铺 Profile */
+  createStoreProfile: (platform: string, name: string) => Promise<{ id: string; name: string }>
+
+  /** 删除店铺 Profile */
+  deleteStoreProfile: (profileId: string) => Promise<void>
+
+  /** 检查 Profile 登录状态 */
+  checkLoginStatus: (profileId: string) => Promise<{ loggedIn: boolean; lastLogin?: string }>
+
+  /** 登录店铺 - 打开登录页面让用户扫码 */
+  loginStore: (profileId: string) => Promise<{ success: boolean }>
+
+  /** 调试选择器 - 使用已登录的 Profile */
+  debugSelectorsWithProfile: (
+    platform: string,
+    page: string,
+    profileId: string,
+    url?: string
+  ) => Promise<{ elements: Array<{ selector: string; count: number }>; loginRequired?: boolean }>
+
+  /** 测试选择器 - 使用已登录的 Profile */
+  testSelectorsWithProfile: (
+    platform: string,
+    page: string,
+    profileId: string
+  ) => Promise<Record<string, { valid: boolean; count: number }>>
 }
 
 /**
@@ -1975,6 +2007,36 @@ const electronAPI: ElectronAPI = {
 
   detectBrokenSelectors: (platform: string, pages: string[]) => {
     return ipcRenderer.invoke('selector:detect-broken', platform, pages)
+  },
+
+  // ===== 店铺 Profile 管理 =====
+
+  getStoreProfiles: () => {
+    return ipcRenderer.invoke('store:get-profiles')
+  },
+
+  createStoreProfile: (platform: string, name: string) => {
+    return ipcRenderer.invoke('store:create-profile', platform, name)
+  },
+
+  deleteStoreProfile: (profileId: string) => {
+    return ipcRenderer.invoke('store:delete-profile', profileId)
+  },
+
+  checkLoginStatus: (profileId: string) => {
+    return ipcRenderer.invoke('store:check-login', profileId)
+  },
+
+  loginStore: (profileId: string) => {
+    return ipcRenderer.invoke('store:login', profileId)
+  },
+
+  debugSelectorsWithProfile: (platform: string, page: string, profileId: string, url?: string) => {
+    return ipcRenderer.invoke('selector:debug-with-profile', platform, page, profileId, url)
+  },
+
+  testSelectorsWithProfile: (platform: string, page: string, profileId: string) => {
+    return ipcRenderer.invoke('selector:test-with-profile', platform, page, profileId)
   },
 }
 

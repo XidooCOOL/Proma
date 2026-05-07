@@ -218,7 +218,7 @@ import { getDingTalkConfig, saveDingTalkConfig, getDecryptedClientSecret, getDin
 import { dingtalkBridgeManager } from './lib/dingtalk-bridge-manager'
 import { getWeChatConfig } from './lib/wechat-config'
 import { wechatBridge } from './lib/wechat-bridge'
-import { registerEcommerceHandlers, registerSelectorHandlers } from './lib/ecommerce-handler'
+import { registerEcommerceHandlers, registerSelectorHandlers, registerStoreHandlers } from './lib/ecommerce-handler'
 
 /** 文件浏览器中需要隐藏的系统文件 */
 const HIDDEN_FS_ENTRIES = new Set(['.DS_Store', 'Thumbs.db'])
@@ -2560,6 +2560,9 @@ export function registerIpcHandlers(): void {
 
   // 注册 Selector 管理 IPC 处理器
   registerSelectorHandlers()
+
+  // 注册店铺 Profile IPC 处理器
+  registerStoreHandlers()
 
   // 注册更新 IPC 处理器
   registerUpdaterIpc()

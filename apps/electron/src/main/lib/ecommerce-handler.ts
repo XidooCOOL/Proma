@@ -634,5 +634,323 @@ export function registerSelectorHandlers() {
     }
   })
 
-  console.log('[Selector] IPC 处理器已注册')
+  // ===== 店铺 Profile 管理 =====
+
+interface StoreProfile {
+  id: string
+  name: string
+  platform: string
+  profilePath: string
+  status: string
+  loggedIn: boolean
+  lastLogin?: string
+}
+
+function getProfilesDir(): string {
+  return join(WORKSPACE_DIR, 'profiles')
+}
+
+function getProfilePath(profileId: string): string {
+  return join(getProfilesDir(), profileId)
+}
+
+function loadProfiles(): StoreProfile[] {
+  const profilesDir = getProfilesDir()
+  if (!existsSync(profilesDir)) {
+    return []
+  }
+  
+  try {
+    const content = readFileSync(join(profilesDir, 'profiles.json'), 'utf-8')
+    return JSON.parse(content)
+  } catch {
+    return []
+  }
+}
+
+function saveProfiles(profiles: StoreProfile[]): void {
+  const profilesDir = getProfilesDir()
+  mkdirSync(profilesDir, { recursive: true })
+  writeFileSync(join(profilesDir, 'profiles.json'), JSON.stringify(profiles, null, 2))
+}
+
+function checkLoginStatus(profilePath: string): { loggedIn: boolean } {
+  const cookiesFile = join(profilePath, 'cookies.json')
+  if (!existsSync(cookiesFile)) {
+    return { loggedIn: false }
+  }
+  try {
+    const cookies = JSON.parse(readFileSync(cookiesFile, 'utf-8'))
+    return { loggedIn: cookies.length > 0 }
+  } catch {
+    return { loggedIn: false }
+  }
+}
+
+/**
+ * 注册店铺 Profile IPC 处理器
+ */
+export function registerStoreHandlers() {
+  // 获取店铺列表
+  ipcMain.handle('store:get-profiles', async () => {
+    try {
+      const profiles = loadProfiles()
+      return profiles.map(p => {
+        const loginStatus = checkLoginStatus(p.profilePath)
+        return {
+          ...p,
+          loggedIn: loginStatus.loggedIn,
+          status: loginStatus.loggedIn ? 'logged_in' : 'not_logged_in',
+        }
+      })
+    } catch (error) {
+      console.error('[Store] 获取列表失败:', error)
+      return []
+    }
+  })
+
+  // 创建 Profile
+  ipcMain.handle('store:create-profile', async (_, platform: string, name: string) => {
+    try {
+      const profiles = loadProfiles()
+      const id = `profile_${Date.now()}`
+      const profilePath = getProfilePath(id)
+      
+      mkdirSync(profilePath, { recursive: true })
+      
+      const newProfile: StoreProfile = {
+        id,
+        name,
+        platform,
+        profilePath,
+        status: 'not_logged_in',
+        loggedIn: false,
+      }
+      
+      profiles.push(newProfile)
+      saveProfiles(profiles)
+      
+      return { id, name }
+    } catch (error) {
+      console.error('[Store] 创建失败:', error)
+      throw error
+    }
+  })
+
+  // 删除 Profile
+  ipcMain.handle('store:delete-profile', async (_, profileId: string) => {
+    try {
+      const profiles = loadProfiles()
+      const filtered = profiles.filter(p => p.id !== profileId)
+      saveProfiles(filtered)
+      
+      // 删除目录
+      const profilePath = getProfilePath(profileId)
+      if (existsSync(profilePath)) {
+        require('fs').rmSync(profilePath, { recursive: true })
+      }
+    } catch (error) {
+      console.error('[Store] 删除失败:', error)
+      throw error
+    }
+  })
+
+  // 检查登录状态
+  ipcMain.handle('store:check-login', async (_, profileId: string) => {
+    try {
+      const profiles = loadProfiles()
+      const profile = profiles.find(p => p.id === profileId)
+      if (!profile) {
+        return { loggedIn: false }
+      }
+      return checkLoginStatus(profile.profilePath)
+    } catch (error) {
+      console.error('[Store] 检查登录失败:', error)
+      return { loggedIn: false }
+    }
+  })
+
+  // 登录店铺
+  ipcMain.handle('store:login', async (_, profileId: string) => {
+    try {
+      const profiles = loadProfiles()
+      const profile = profiles.find(p => p.id === profileId)
+      if (!profile) {
+        throw new Error('Profile 不存在')
+      }
+      
+      const { chromium } = require('playwright')
+      
+      // 打开登录页面
+      const loginUrls: Record<string, string> = {
+        pinduoduo: 'https://mobile.pinduoduo.com/login',
+        douyin: 'https://creator.douyin.com/',
+        taobao: 'https://login.taobao.com',
+        jd: 'https://passport.jd.com',
+        kuaishou: 'https://www.kuaishou.com/login',
+      }
+      
+      const url = loginUrls[profile.platform] || 'https://www.baidu.com'
+      
+      // 启动带 Profile 的浏览器
+      const browser = await chromium.launch({ headless: false })
+      const context = await browser.newContext({
+        userDataDir: profile.profilePath,
+        viewport: { width: 1280, height: 720 },
+      })
+      
+      const page = await context.newPage()
+      await page.goto(url, { waitUntil: 'domcontentloaded' })
+      
+      // 等待用户扫码登录（最多等待 5 分钟）
+      console.log('[Store] 等待用户登录...')
+      
+      // 监听登录成功（可以通过检测 cookies 或页面变化）
+      await page.waitForTimeout(5 * 60 * 1000)
+      
+      // 保存 cookies
+      const cookies = await context.cookies()
+      const cookiesFile = join(profile.profilePath, 'cookies.json')
+      writeFileSync(cookiesFile, JSON.stringify(cookies, null, 2))
+      
+      // 更新状态
+      profile.status = 'logged_in'
+      profile.loggedIn = true
+      profile.lastLogin = new Date().toISOString()
+      saveProfiles(profiles)
+      
+      await browser.close()
+      
+      return { success: true }
+    } catch (error) {
+      console.error('[Store] 登录失败:', error)
+      throw error
+    }
+  })
+
+  // 使用 Profile 调试选择器
+  ipcMain.handle('selector:debug-with-profile', async (_, platform: string, page: string, profileId: string, url?: string) => {
+    try {
+      const profiles = loadProfiles()
+      const profile = profiles.find(p => p.id === profileId)
+      if (!profile) {
+        throw new Error('Profile 不存在')
+      }
+      
+      // 检查登录状态
+      const loginStatus = checkLoginStatus(profile.profilePath)
+      if (!loginStatus.loggedIn) {
+        return { elements: [], loginRequired: true }
+      }
+      
+      // 获取默认 URL
+      const defaultUrls: Record<string, string> = {
+        productCreate: 'https://mobile.pinduoduo.com/goods/detail',
+        orderList: 'https://mms.pinduoduo.com/order/list',
+        productList: 'https://mms.pinduoduo.com/goods/list',
+      }
+      const targetUrl = url || defaultUrls[page] || `https://mobile.pinduoduo.com/`
+      
+      const { chromium } = require('playwright')
+      
+      const browser = await chromium.launch({ headless: true })
+      const context = await browser.newContext({
+        userDataDir: profile.profilePath,
+        viewport: { width: 1280, height: 720 },
+      })
+      
+      const pageObj = await context.newPage()
+      await pageObj.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 })
+      await pageObj.waitForTimeout(2000)
+      
+      const detected: Array<{ selector: string; count: number }> = []
+      
+      const commonSelectors = [
+        'input[type="text"]', 'input[type="number"]', 'input[type="password"]',
+        'textarea', 'select', 'button', 'a[href]',
+        'input[type="file"]', 'input[type="checkbox"]', 'input[type="radio"]',
+        '[placeholder]', '[class*="input"]', '[class*="btn"]', '[class*="button"]',
+        '[class*="search"]', '[class*="upload"]', '[class*="submit"]',
+        '[class*="title"]', '[class*="price"]', '[class*="stock"]',
+        '[class*="form"] input', '[class*="form"] button',
+        '[class*="modal"] input', '[class*="modal"] button',
+        '[class*="table"] input', '[class*="table"] button',
+        'table th', 'table td',
+      ]
+      
+      for (const selector of commonSelectors) {
+        try {
+          const count = await pageObj.locator(selector).count()
+          if (count > 0 && count < 100) {
+            detected.push({ selector, count })
+          }
+        } catch {
+          // 忽略无效选择器
+        }
+      }
+      
+      detected.sort((a, b) => b.count - a.count)
+      
+      await browser.close()
+      
+      return { elements: detected.slice(0, 20) }
+    } catch (error) {
+      console.error('[Selector] Profile 调试失败:', error)
+      throw error
+    }
+  })
+
+  // 使用 Profile 测试选择器
+  ipcMain.handle('selector:test-with-profile', async (_, platform: string, page: string, profileId: string) => {
+    try {
+      const profiles = loadProfiles()
+      const profile = profiles.find(p => p.id === profileId)
+      if (!profile) {
+        throw new Error('Profile 不存在')
+      }
+      
+      const selectors = getPlatformSelectors(platform)
+      const pageSelectors = selectors[page]?.elements || {}
+      
+      const { chromium } = require('playwright')
+      
+      const browser = await chromium.launch({ headless: true })
+      const context = await browser.newContext({
+        userDataDir: profile.profilePath,
+        viewport: { width: 1280, height: 720 },
+      })
+      
+      const pageObj = await context.newPage()
+      
+      // 获取测试 URL
+      const urlPattern = selectors[page]?.urlPattern || ''
+      const testUrl = urlPattern.replace(/\*\*/g, '').replace(/\*/g, '') || 'https://mobile.pinduoduo.com/'
+      
+      await pageObj.goto(testUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {})
+      await pageObj.waitForTimeout(2000)
+      
+      const results: Record<string, { valid: boolean; count: number }> = {}
+      
+      for (const [name, def] of Object.entries(pageSelectors)) {
+        try {
+          const count = await pageObj.locator(def.selector).count()
+          results[name] = { valid: count > 0, count }
+        } catch {
+          results[name] = { valid: false, count: 0 }
+        }
+      }
+      
+      await browser.close()
+      
+      return results
+    } catch (error) {
+      console.error('[Selector] Profile 测试失败:', error)
+      throw error
+    }
+  })
+
+  console.log('[Store] IPC 处理器已注册')
+}
+
+console.log('[Selector] IPC 处理器已注册')
 }

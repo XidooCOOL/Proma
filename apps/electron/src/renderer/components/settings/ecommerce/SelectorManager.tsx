@@ -752,32 +752,88 @@ interface SelectorDebuggerProps {
 }
 
 function SelectorDebugger({ platform, page, onSelectorFound }: SelectorDebuggerProps): React.ReactElement {
-  const [debugUrl, setDebugUrl] = React.useState('')
+  const [profiles, setProfiles] = React.useState<Array<{ id: string; name: string; status: string }>>([])
+  const [selectedProfile, setSelectedProfile] = React.useState<string>('')
   const [isRunning, setIsRunning] = React.useState(false)
   const [foundElements, setFoundElements] = React.useState<Array<{ selector: string; count: number }>>([])
   const [error, setError] = React.useState<string | null>(null)
+  const [pageUrl, setPageUrl] = React.useState<string>('')
+  const [loginRequired, setLoginRequired] = React.useState(false)
+
+  // 加载平台的 Profile 列表
+  React.useEffect(() => {
+    const loadProfiles = async () => {
+      try {
+        const platformProfiles = await window.electronAPI.getStoreProfiles()
+        setProfiles(platformProfiles.filter((p: any) => p.platform === platform))
+        if (platformProfiles.length > 0) {
+          setSelectedProfile(platformProfiles[0].id)
+        }
+      } catch (err) {
+        console.error('[SelectorDebugger] 加载 Profile 失败:', err)
+      }
+    }
+    loadProfiles()
+  }, [platform])
+
+  // 根据页面类型获取默认 URL
+  React.useEffect(() => {
+    const defaultUrls: Record<string, string> = {
+      productCreate: 'https://mobile.pinduoduo.com/goods/detail',
+      orderList: 'https://mms.pinduoduo.com/order/list',
+      login: 'https://mobile.pinduoduo.com/login',
+    }
+    setPageUrl(defaultUrls[page] || '')
+  }, [platform, page])
 
   const startDebug = async () => {
-    if (!debugUrl.trim()) {
-      toast.error('请输入页面 URL')
+    if (!selectedProfile) {
+      toast.error('请先选择一个店铺 Profile')
       return
     }
     setIsRunning(true)
     setError(null)
     setFoundElements([])
+    setLoginRequired(false)
+    
     try {
-      const elements = await window.electronAPI.debugSelectors(platform, page, debugUrl)
-      setFoundElements(elements)
-      if (elements.length === 0) {
+      const result = await window.electronAPI.debugSelectorsWithProfile(
+        platform,
+        page,
+        selectedProfile,
+        pageUrl
+      )
+      
+      if (result.loginRequired) {
+        setLoginRequired(true)
+        toast.warning('该 Profile 未登录，请先登录后再调试')
+        return
+      }
+      
+      setFoundElements(result.elements || [])
+      if ((result.elements || []).length === 0) {
         toast.warning('未找到任何匹配的元素')
       } else {
-        toast.success(`找到 ${elements.length} 个可用的选择器`)
+        toast.success(`找到 ${result.elements.length} 个可用的选择器`)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '调试失败')
       toast.error('调试失败')
     } finally {
       setIsRunning(false)
+    }
+  }
+
+  const handleProfileChange = async (profileId: string) => {
+    setSelectedProfile(profileId)
+    // 检查登录状态
+    try {
+      const status = await window.electronAPI.checkLoginStatus(profileId)
+      if (!status.loggedIn) {
+        setLoginRequired(true)
+      }
+    } catch (err) {
+      console.error('[SelectorDebugger] 检查登录状态失败:', err)
     }
   }
 
@@ -790,14 +846,63 @@ function SelectorDebugger({ platform, page, onSelectorFound }: SelectorDebuggerP
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label className="text-xs text-blue-700">选择店铺 Profile</Label>
+            <Select value={selectedProfile} onValueChange={handleProfileChange}>
+              <SelectTrigger className="h-8">
+                <SelectValue placeholder="选择店铺..." />
+              </SelectTrigger>
+              <SelectContent>
+                {profiles.length === 0 ? (
+                  <SelectItem value="none" disabled>暂无店铺</SelectItem>
+                ) : (
+                  profiles.map((profile) => (
+                    <SelectItem key={profile.id} value={profile.id}>
+                      <span className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full ${profile.status === 'logged_in' ? 'bg-green-500' : 'bg-yellow-500'}`} />
+                        {profile.name}
+                      </span>
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-blue-700">目标页面</Label>
+            <Input
+              value={pageUrl}
+              onChange={(e) => setPageUrl(e.target.value)}
+              placeholder="页面 URL"
+              className="h-8 text-sm"
+            />
+          </div>
+        </div>
+        
+        {loginRequired && (
+          <div className="flex items-center gap-2 p-2 bg-yellow-100 rounded text-yellow-700 text-sm">
+            <AlertCircle className="h-4 w-4" />
+            该店铺未登录，需要先登录后再调试
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="ml-auto"
+              onClick={async () => {
+                await window.electronAPI.loginStore(selectedProfile)
+              }}
+            >
+              登录店铺
+            </Button>
+          </div>
+        )}
+        
         <div className="flex items-center gap-2">
-          <Input
-            value={debugUrl}
-            onChange={(e) => setDebugUrl(e.target.value)}
-            placeholder="输入要调试的页面 URL（如商品发布页面）"
+          <Button 
+            onClick={startDebug} 
+            disabled={isRunning || !selectedProfile || loginRequired}
             className="flex-1"
-          />
-          <Button onClick={startDebug} disabled={isRunning}>
+          >
             {isRunning ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -806,17 +911,19 @@ function SelectorDebugger({ platform, page, onSelectorFound }: SelectorDebuggerP
             ) : (
               <>
                 <Play className="mr-2 h-4 w-4" />
-                检测
+                使用已登录的 Profile 调试
               </>
             )}
           </Button>
         </div>
+        
         {error && (
           <div className="flex items-center gap-2 p-2 bg-red-100 rounded text-red-700 text-sm">
             <AlertCircle className="h-4 w-4" />
             {error}
           </div>
         )}
+        
         {foundElements.length > 0 && (
           <div className="space-y-2">
             <p className="text-sm font-medium text-blue-700">
@@ -827,7 +934,14 @@ function SelectorDebugger({ platform, page, onSelectorFound }: SelectorDebuggerP
                 <div
                   key={i}
                   className="flex items-center justify-between p-2 bg-white rounded border cursor-pointer hover:bg-blue-50"
-                  onClick={() => onSelectorFound({ ...el, id: '', name: '', description: '', type: 'container', required: false } as any)}
+                  onClick={() => onSelectorFound({ 
+                    ...el, 
+                    id: '', 
+                    name: '', 
+                    description: '', 
+                    type: 'container', 
+                    required: false 
+                  } as any)}
                 >
                   <code className="text-xs flex-1 truncate">{el.selector}</code>
                   <Badge variant="secondary" className="ml-2">
