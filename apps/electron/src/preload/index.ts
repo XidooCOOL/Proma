@@ -911,6 +911,48 @@ export interface ElectronAPI {
     page: string,
     profileId: string
   ) => Promise<Record<string, { valid: boolean; count: number }>>
+
+  // ===== 电商状态监控 =====
+
+  /** 订阅电商状态 */
+  subscribeEcommerceStatus: () => Promise<{
+    workers: any[]
+    tasks: any[]
+    stores: any[]
+    mcp: any | null
+  }>
+
+  /** 获取当前状态 */
+  getEcommerceStatus: () => Promise<{
+    workers: any[]
+    tasks: any[]
+    stores: any[]
+    mcp: any | null
+  }>
+
+  /** 获取任务状态 */
+  getEcommerceTaskStatus: (taskId: string) => Promise<any | null>
+
+  /** 取消任务 */
+  cancelEcommerceTask: (taskId: string) => Promise<{ success: boolean }>
+
+  /** 监听任务进度 */
+  onEcommerceTaskProgress: (callback: (event: any) => void) => () => void
+
+  /** 监听任务批量更新 */
+  onEcommerceTasksBatch: (callback: (event: { tasks: any[] }) => void) => () => void
+
+  /** 监听 Worker 进度 */
+  onEcommerceWorkerProgress: (callback: (event: any) => void) => () => void
+
+  /** 监听 Worker 结果 */
+  onEcommerceWorkerResult: (callback: (event: any) => void) => () => void
+
+  /** 监听店铺状态更新 */
+  onEcommerceStoreUpdate: (callback: (event: any) => void) => () => void
+
+  /** 监听 MCP 状态 */
+  onEcommerceMcpStatus: (callback: (event: any) => void) => () => void
 }
 
 /**
@@ -2037,6 +2079,60 @@ const electronAPI: ElectronAPI = {
 
   testSelectorsWithProfile: (platform: string, page: string, profileId: string) => {
     return ipcRenderer.invoke('selector:test-with-profile', platform, page, profileId)
+  },
+
+  // ===== 电商状态监控 =====
+
+  subscribeEcommerceStatus: () => {
+    return ipcRenderer.invoke('ecommerce:subscribe-status')
+  },
+
+  getEcommerceStatus: () => {
+    return ipcRenderer.invoke('ecommerce:get-status')
+  },
+
+  getEcommerceTaskStatus: (taskId: string) => {
+    return ipcRenderer.invoke('ecommerce:get-task-status', taskId)
+  },
+
+  cancelEcommerceTask: (taskId: string) => {
+    return ipcRenderer.invoke('ecommerce:cancel-task', taskId)
+  },
+
+  onEcommerceTaskProgress: (callback: (event: any) => void) => {
+    const listener = (_: any, event: any) => callback(event)
+    ipcRenderer.on('ecommerce:task-progress', listener)
+    return () => ipcRenderer.removeListener('ecommerce:task-progress', listener)
+  },
+
+  onEcommerceTasksBatch: (callback: (event: { tasks: any[] }) => void) => {
+    const listener = (_: any, event: { tasks: any[] }) => callback(event)
+    ipcRenderer.on('ecommerce:tasks-batch', listener)
+    return () => ipcRenderer.removeListener('ecommerce:tasks-batch', listener)
+  },
+
+  onEcommerceWorkerProgress: (callback: (event: any) => void) => {
+    const listener = (_: any, event: any) => callback(event)
+    ipcRenderer.on('ecommerce:worker-progress', listener)
+    return () => ipcRenderer.removeListener('ecommerce:worker-progress', listener)
+  },
+
+  onEcommerceWorkerResult: (callback: (event: any) => void) => {
+    const listener = (_: any, event: any) => callback(event)
+    ipcRenderer.on('ecommerce:worker-result', listener)
+    return () => ipcRenderer.removeListener('ecommerce:worker-result', listener)
+  },
+
+  onEcommerceStoreUpdate: (callback: (event: any) => void) => {
+    const listener = (_: any, event: any) => callback(event)
+    ipcRenderer.on('ecommerce:store-updated', listener)
+    return () => ipcRenderer.removeListener('ecommerce:store-updated', listener)
+  },
+
+  onEcommerceMcpStatus: (callback: (event: any) => void) => {
+    const listener = (_: any, event: any) => callback(event)
+    ipcRenderer.on('ecommerce:mcp-status', listener)
+    return () => ipcRenderer.removeListener('ecommerce:mcp-status', listener)
   },
 }
 

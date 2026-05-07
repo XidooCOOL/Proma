@@ -219,6 +219,7 @@ import { dingtalkBridgeManager } from './lib/dingtalk-bridge-manager'
 import { getWeChatConfig } from './lib/wechat-config'
 import { wechatBridge } from './lib/wechat-bridge'
 import { registerEcommerceHandlers, registerSelectorHandlers, registerStoreHandlers } from './lib/ecommerce-handler'
+import { registerEcommerceStatusHandlers } from './lib/ecommerce-status-monitor'
 
 /** 文件浏览器中需要隐藏的系统文件 */
 const HIDDEN_FS_ENTRIES = new Set(['.DS_Store', 'Thumbs.db'])
@@ -2563,6 +2564,9 @@ export function registerIpcHandlers(): void {
 
   // 注册店铺 Profile IPC 处理器
   registerStoreHandlers()
+
+  // 注册电商状态监控处理器
+  registerEcommerceStatusHandlers()
 
   // 注册更新 IPC 处理器
   registerUpdaterIpc()
