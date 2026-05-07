@@ -139,6 +139,9 @@ export function AgentSettings(): React.ReactElement {
   const [viewMode, setViewMode] = React.useState<ViewMode>('list')
   const [editingServer, setEditingServer] = React.useState<EditingServer | null>(null)
 
+  // 电商功能状态
+  const [isEcommerceEnabled, setIsEcommerceEnabled] = React.useState(false)
+
   // Data
   const [mcpConfig, setMcpConfig] = React.useState<WorkspaceMcpConfig>({ servers: {} })
   const [skills, setSkills] = React.useState<SkillMeta[]>([])
@@ -158,14 +161,16 @@ export function AgentSettings(): React.ReactElement {
       return
     }
     try {
-      const [config, skillList, dir] = await Promise.all([
+      const [config, skillList, dir, ecommerceStatus] = await Promise.all([
         window.electronAPI.getWorkspaceMcpConfig(workspaceSlug),
         window.electronAPI.getWorkspaceSkills(workspaceSlug),
         window.electronAPI.getWorkspaceSkillsDir(workspaceSlug),
+        window.electronAPI.checkEcommerceStatus(),
       ])
       setMcpConfig(config)
       setSkills(skillList)
       setSkillsDir(dir)
+      setIsEcommerceEnabled(ecommerceStatus.isEnabled)
     } catch (error) {
       console.error('[Agent 设置] 加载工作区配置失败:', error)
     } finally {
@@ -188,6 +193,16 @@ export function AgentSettings(): React.ReactElement {
   }, [showImportDialog, loadOtherWorkspaces])
 
   React.useEffect(() => { loadData() }, [loadData])
+
+  // 监听电商安装进度事件
+  React.useEffect(() => {
+    const unsubscribe = window.electronAPI.onEcommerceProgress((progress) => {
+      if (progress.step === 'completed') {
+        setIsEcommerceEnabled(true)
+      }
+    })
+    return () => unsubscribe()
+  }, [])
 
   if (!currentWorkspace) {
     return (
@@ -573,7 +588,7 @@ ${skillList}
 
         {/* ===== Ecommerce Tab ===== */}
         <TabsContent value="ecommerce" className="mt-4">
-          <EcommerceSetup />
+          {state.isEcommerceEnabled ? <EcommerceSettings /> : <EcommerceSetup />}
         </TabsContent>
       </Tabs>
 
