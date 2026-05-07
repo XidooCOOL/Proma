@@ -1,17 +1,5 @@
 {
   "servers": {
-    "ecommerce-orchestrator": {
-      "type": "stdio",
-      "command": "node",
-      "args": [
-        "{{workspaceDir}}/node_modules/.bin/ecommerce-mcp-server"
-      ],
-      "enabled": true,
-      "description": "电商多任务编排器，支持商品上架、内容采集等多种任务并行",
-      "env": {
-        "NODE_ENV": "production"
-      }
-    },
     "playwright": {
       "type": "stdio",
       "command": "npx",
