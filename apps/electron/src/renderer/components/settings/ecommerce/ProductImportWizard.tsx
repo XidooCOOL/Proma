@@ -1,15 +1,12 @@
 /**
- * ProductImportWizard - 商品导入向导 v2
+ * ProductImportWizard - 商品导入向导 v3
+ * 
+ * 支持多平台多店铺的任务规划
  * 
  * 文件结构：
  * 📁 /商品上架/
  * ├── 📁 001_夏季短袖/
  * │   ├── 🖼️ 001.jpg
- * │   ├── 🖼️ 001_1.jpg
- * │   ├── 📄 products.csv   ← 商品参数
- * │   └── 📄 skus.csv      ← SKU参数
- * ├── 📁 002_牛仔裤/
- * │   ├── 🖼️ 002.jpg
  * │   ├── 📄 products.csv
  * │   └── 📄 skus.csv
  * └── ...
@@ -18,23 +15,25 @@
 import * as React from 'react'
 import {
   FolderOpen,
-  FileSpreadsheet,
   Image,
   Check,
-  X,
   ChevronRight,
   ChevronLeft,
   Eye,
   Loader2,
-  AlertCircle,
   Layers,
   Package,
   Edit3,
+  Grid3x3,
+  List,
   Plus,
   Minus,
-  Trash2,
-  ArrowUp,
-  ArrowDown,
+  Settings,
+  Play,
+  Pause,
+  CheckCircle2,
+  Circle,
+  XCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -54,7 +53,6 @@ import {
 import { Checkbox } from '@/components/ui/checkbox'
 import { Progress } from '@/components/ui/progress'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 
 /** 商品基础信息 */
@@ -63,23 +61,17 @@ interface ProductBaseInfo {
   price: number
   origin?: string
   description?: string
-  freight?: string
-  weight?: string
-  brand?: string
-  category?: string
 }
 
 /** SKU 信息 */
 interface SKUInfo {
   code: string
   stock: number
-  price?: number
   color?: string
   size?: string
-  specs?: Record<string, string>
 }
 
-/** 单个商品完整数据 */
+/** 单个商品数据 */
 interface ProductData {
   id: string
   folderPath: string
@@ -88,46 +80,66 @@ interface ProductData {
   imageCount: number
   baseInfo?: ProductBaseInfo
   skus?: SKUInfo[]
-  hasProductsCsv: boolean
-  hasSkusCsv: boolean
-  readError?: string
+  /** 平台-店铺映射 */
+  targets: Map<string, boolean> // key: "platform:profileId"
 }
 
-/** 预览编辑状态 */
-interface PreviewEditState {
+/** 目标平台/店铺配置 */
+interface TargetConfig {
+  platform: string
+  platformName: string
+  profileId: string
+  profileName: string
+  enabled: boolean
+}
+
+/** 任务规划项 */
+interface TaskItem {
+  productId: string
+  productName: string
   folderName: string
-  title: string
-  price: string
-  origin: string
-  description: string
   images: string[]
-  skus: SKUInfo[]
+  baseInfo?: ProductBaseInfo
+  skus?: SKUInfo[]
+  platform: string
+  platformName: string
+  profileId: string
+  profileName: string
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
+  progress: number
+  error?: string
+}
+
+/** 任务组 */
+interface TaskGroup {
+  id: string
+  platform: string
+  platformName: string
+  profileId: string
+  profileName: string
+  tasks: TaskItem[]
 }
 
 interface ProductImportWizardProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onConfirm: (products: ProductData[]) => void
-  defaultPlatform?: string
-  availableProfiles?: Array<{ id: string; name: string; platform: string }>
+  onConfirm: (taskGroups: TaskGroup[]) => void
+  availableTargets: TargetConfig[]
 }
 
-type Step = 'select-root' | 'preview-edit' | 'confirm'
+type Step = 'select-root' | 'config-targets' | 'plan-review' | 'confirm'
 
 export function ProductImportWizard({
   open,
   onOpenChange,
   onConfirm,
-  defaultPlatform = 'pinduoduo',
-  availableProfiles = [],
+  availableTargets = [],
 }: ProductImportWizardProps): React.ReactElement {
   const [currentStep, setCurrentStep] = React.useState<Step>('select-root')
-  const [platform, setPlatform] = React.useState(defaultPlatform)
-  const [profileId, setProfileId] = React.useState('')
-  const [selectedProducts, setSelectedProducts] = React.useState<ProductData[]>([])
-  const [rootPath, setRootPath] = React.useState('')
+  const [products, setProducts] = React.useState<ProductData[]>([])
   const [scanning, setScanning] = React.useState(false)
-  const [editProduct, setEditProduct] = React.useState<PreviewEditState | null>(null)
+  const [editProduct, setEditProduct] = React.useState<ProductData | null>(null)
+  const [viewMode, setViewMode] = React.useState<'grid' | 'matrix'>('grid')
 
   /** 选择根文件夹并扫描 */
   const handleSelectRootFolder = async () => {
@@ -135,15 +147,17 @@ export function ProductImportWizard({
     try {
       const result = await window.electronAPI.selectImageFolders(false)
       if (result.success && result.folders?.[0]) {
-        const root = result.folders[0]
-        setRootPath(root.path)
-
-        // 扫描子文件夹
-        const scanResult = await window.electronAPI.scanProductFolders(root.path)
+        const root = result.folders[0].path
+        const scanResult = await window.electronAPI.scanProductFolders(root)
         if (scanResult.success && scanResult.products) {
-          setSelectedProducts(scanResult.products)
+          // 初始化 targets
+          const productsWithTargets = scanResult.products.map((p: any) => ({
+            ...p,
+            targets: new Map<string, boolean>(),
+          }))
+          setProducts(productsWithTargets)
           toast.success(`扫描完成，发现 ${scanResult.products.length} 个商品`)
-          setCurrentStep('preview-edit')
+          setCurrentStep('config-targets')
         } else {
           toast.error(scanResult.error || '扫描失败')
         }
@@ -155,76 +169,104 @@ export function ProductImportWizard({
     }
   }
 
-  /** 更新商品选择状态 */
-  const handleToggleProduct = (id: string) => {
-    setSelectedProducts(prev =>
-      prev.map(p => p.id === id ? { ...p, _selected: !p._selected } : p)
+  /** 切换商品的目标平台 */
+  const handleToggleTarget = (productId: string, targetKey: string) => {
+    setProducts(prev =>
+      prev.map(p => {
+        if (p.id !== productId) return p
+        const newTargets = new Map(p.targets)
+        newTargets.set(targetKey, !newTargets.get(targetKey))
+        return { ...p, targets: newTargets }
+      })
     )
   }
 
-  /** 编辑商品信息 */
-  const handleEditProduct = (product: ProductData) => {
-    setEditProduct({
-      folderName: product.folderName,
-      title: product.baseInfo?.title || product.folderName,
-      price: product.baseInfo?.price?.toString() || '',
-      origin: product.baseInfo?.origin || '',
-      description: product.baseInfo?.description || '',
-      images: product.images,
-      skus: product.skus || [],
-    })
-  }
-
-  /** 保存编辑 */
-  const handleSaveEdit = () => {
-    if (!editProduct) return
-    
-    setSelectedProducts(prev =>
-      prev.map(p =>
-        p.folderName === editProduct.folderName
-          ? {
-              ...p,
-              baseInfo: {
-                title: editProduct.title,
-                price: parseFloat(editProduct.price) || 0,
-                origin: editProduct.origin,
-                description: editProduct.description,
-              },
-              skus: editProduct.skus,
-            }
-          : p
-      )
+  /** 全选/取消全选某个平台 */
+  const handleTogglePlatformAll = (targetKey: string, enabled: boolean) => {
+    setProducts(prev =>
+      prev.map(p => {
+        const newTargets = new Map(p.targets)
+        newTargets.set(targetKey, enabled)
+        return { ...p, targets: newTargets }
+      })
     )
-    setEditProduct(null)
-    toast.success('已保存修改')
   }
 
-  /** 确认并执行 */
+  /** 生成任务计划 */
+  const generateTaskGroups = (): TaskGroup[] => {
+    const groups: Map<string, TaskGroup> = new Map()
+
+    for (const product of products) {
+      for (const [targetKey, enabled] of product.targets) {
+        if (!enabled) continue
+
+        const [platform, profileId] = targetKey.split(':')
+        const config = availableTargets.find(
+          t => t.platform === platform && t.profileId === profileId
+        )
+        if (!config) continue
+
+        const groupKey = targetKey
+        if (!groups.has(groupKey)) {
+          groups.set(groupKey, {
+            id: groupKey,
+            platform,
+            platformName: config.platformName,
+            profileId,
+            profileName: config.profileName,
+            tasks: [],
+          })
+        }
+
+        groups.get(groupKey)!.tasks.push({
+          productId: product.id,
+          productName: product.baseInfo?.title || product.folderName,
+          folderName: product.folderName,
+          images: product.images,
+          baseInfo: product.baseInfo,
+          skus: product.skus,
+          platform,
+          platformName: config.platformName,
+          profileId,
+          profileName: config.profileName,
+          status: 'pending',
+          progress: 0,
+        })
+      }
+    }
+
+    return Array.from(groups.values())
+  }
+
+  /** 确认执行 */
   const handleConfirm = () => {
-    const validProducts = selectedProducts.filter(p => p.baseInfo?.title)
-    if (validProducts.length === 0) {
-      toast.error('没有可上传的商品')
+    const taskGroups = generateTaskGroups()
+    if (taskGroups.length === 0) {
+      toast.error('没有配置任何上架任务')
       return
     }
     
-    onConfirm(validProducts.map(p => ({
-      ...p,
-      platform,
-      profileId: profileId || undefined,
-    })))
+    const totalTasks = taskGroups.reduce((sum, g) => sum + g.tasks.length, 0)
+    toast.success(`已生成 ${taskGroups.length} 个任务组，共 ${totalTasks} 个上架任务`)
     
+    onConfirm(taskGroups)
     resetState()
     onOpenChange(false)
   }
 
   const resetState = () => {
     setCurrentStep('select-root')
-    setSelectedProducts([])
-    setRootPath('')
+    setProducts([])
     setEditProduct(null)
   }
 
-  const selectedCount = selectedProducts.filter(p => p._selected !== false).length
+  const selectedTargetsCount = availableTargets.filter(t => t.enabled).length
+  const enabledProductCount = products.filter(p => 
+    Array.from(p.targets.values()).some(v => v)
+  ).length
+  const totalTaskCount = products.reduce((sum, p) => 
+    sum + Array.from(p.targets.values()).filter(Boolean).length, 0
+  )
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -235,7 +277,7 @@ export function ProductImportWizard({
             商品批量导入
           </DialogTitle>
           <DialogDescription>
-            选择商品文件夹，自动读取图片和参数文件
+            选择商品文件夹，配置目标平台，支持多平台多店铺同时上架
           </DialogDescription>
         </DialogHeader>
 
@@ -247,22 +289,25 @@ export function ProductImportWizard({
         {/* 步骤内容 */}
         <div className="flex-1 overflow-hidden">
           {currentStep === 'select-root' && (
-            <FolderSelectView
-              scanning={scanning}
-              onSelectFolder={handleSelectRootFolder}
+            <FolderSelectView scanning={scanning} onSelect={handleSelectRootFolder} />
+          )}
+
+          {currentStep === 'config-targets' && (
+            <ConfigTargetsView
+              products={products}
+              availableTargets={availableTargets}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+              onToggleTarget={handleToggleTarget}
+              onTogglePlatformAll={handleTogglePlatformAll}
+              onEdit={setEditProduct}
             />
           )}
 
-          {currentStep === 'preview-edit' && (
-            <PreviewEditView
-              products={selectedProducts}
-              platform={platform}
-              onPlatformChange={setPlatform}
-              profileId={profileId}
-              onProfileChange={setProfileId}
-              availableProfiles={availableProfiles}
-              onEdit={handleEditProduct}
-              onToggle={handleToggleProduct}
+          {currentStep === 'plan-review' && (
+            <PlanReviewView
+              taskGroups={generateTaskGroups()}
+              onBack={() => setCurrentStep('config-targets')}
             />
           )}
         </div>
@@ -270,53 +315,52 @@ export function ProductImportWizard({
         {/* 底部操作栏 */}
         <div className="flex items-center justify-between pt-4 border-t">
           <div className="text-sm text-muted-foreground">
-            {currentStep === 'preview-edit' && (
+            {currentStep === 'config-targets' && (
               <span>
-                已选择 <strong>{selectedProducts.length}</strong> 个商品
-                {selectedProducts.filter(p => p.baseInfo?.title).length > 0 && (
-                  <span className="ml-2 text-green-600">
-                    ({selectedProducts.filter(p => p.baseInfo?.title).length} 个已配置)
-                  </span>
-                )}
+                已选择 <strong>{enabledProductCount}</strong> 个商品，
+                共 <strong>{totalTaskCount}</strong> 个上架任务
               </span>
             )}
           </div>
 
           <div className="flex gap-2">
-            {currentStep === 'preview-edit' && (
-              <Button variant="outline" onClick={resetState}>
-                重新选择
+            {currentStep !== 'select-root' && (
+              <Button variant="outline" onClick={() => {
+                if (currentStep === 'config-targets') {
+                  setCurrentStep('select-root')
+                } else {
+                  setCurrentStep('config-targets')
+                }
+              }}>
+                <ChevronLeft className="mr-2 h-4 w-4" />
+                上一步
               </Button>
             )}
-            {currentStep === 'preview-edit' && (
-              <Button onClick={() => setCurrentStep('confirm')} disabled={selectedProducts.length === 0}>
+            
+            {currentStep === 'config-targets' && (
+              <Button onClick={() => setCurrentStep('plan-review')} disabled={totalTaskCount === 0}>
                 下一步
                 <ChevronRight className="ml-2 h-4 w-4" />
               </Button>
             )}
-            {currentStep === 'confirm' && (
-              <>
-                <Button variant="outline" onClick={() => setCurrentStep('preview-edit')}>
-                  <ChevronLeft className="mr-2 h-4 w-4" />
-                  返回
-                </Button>
-                <Button onClick={handleConfirm}>
-                  <Check className="mr-2 h-4 w-4" />
-                  开始上传
-                </Button>
-              </>
+
+            {currentStep === 'plan-review' && (
+              <Button onClick={handleConfirm}>
+                <Play className="mr-2 h-4 w-4" />
+                开始上传
+              </Button>
             )}
           </div>
         </div>
 
         {/* 编辑对话框 */}
-        <ProductEditDialog
-          open={!!editProduct}
-          onOpenChange={(open) => !open && setEditProduct(null)}
-          product={editProduct}
-          onChange={setEditProduct}
-          onSave={handleSaveEdit}
-        />
+        {editProduct && (
+          <ProductEditDialog
+            product={editProduct}
+            onChange={setEditProduct}
+            onClose={() => setEditProduct(null)}
+          />
+        )}
       </DialogContent>
     </Dialog>
   )
@@ -326,8 +370,8 @@ export function ProductImportWizard({
 function StepIndicator({ currentStep }: { currentStep: Step }): React.ReactElement {
   const steps = [
     { id: 'select-root', label: '选择文件夹' },
-    { id: 'preview-edit', label: '预览编辑' },
-    { id: 'confirm', label: '确认上传' },
+    { id: 'config-targets', label: '配置目标' },
+    { id: 'plan-review', label: '任务规划' },
   ]
 
   const currentIndex = steps.findIndex(s => s.id === currentStep)
@@ -358,30 +402,22 @@ function StepIndicator({ currentStep }: { currentStep: Step }): React.ReactEleme
   )
 }
 
-/** 步骤1：选择文件夹视图 */
-function FolderSelectView({
-  scanning,
-  onSelectFolder,
-}: {
-  scanning: boolean
-  onSelectFolder: () => void
-}): React.ReactElement {
+/** 步骤1：选择文件夹 */
+function FolderSelectView({ scanning, onSelect }: { scanning: boolean; onSelect: () => void }): React.ReactElement {
   return (
     <div className="flex flex-col items-center justify-center py-12">
-      <div className={cn(
-        'border-2 border-dashed rounded-xl p-16 text-center transition-all cursor-pointer',
-        'hover:border-primary hover:bg-primary/5',
-        scanning && 'opacity-50 pointer-events-none'
-      )}
-        onClick={onSelectFolder}
+      <div
+        className={cn(
+          'border-2 border-dashed rounded-xl p-16 text-center transition-all cursor-pointer max-w-lg',
+          'hover:border-primary hover:bg-primary/5',
+          scanning && 'opacity-50 pointer-events-none'
+        )}
+        onClick={onSelect}
       >
         {scanning ? (
           <>
             <Loader2 className="h-16 w-16 mx-auto mb-4 text-primary animate-spin" />
             <p className="text-lg font-medium">扫描中...</p>
-            <p className="text-sm text-muted-foreground mt-2">
-              正在读取文件夹结构和参数文件
-            </p>
           </>
         ) : (
           <>
@@ -393,96 +429,89 @@ function FolderSelectView({
           </>
         )}
       </div>
-
-      <div className="mt-8 bg-muted/50 rounded-lg p-4 max-w-lg">
-        <h4 className="font-medium mb-2">文件夹结构说明</h4>
-        <div className="text-sm text-muted-foreground space-y-1">
-          <code className="block bg-muted p-2 rounded text-xs">
-            📁 /商品上架/ (选择这个文件夹)<br />
-            &nbsp;&nbsp;├── 📁 001_夏季短袖/<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;├── 🖼️ 001.jpg<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;├── 📄 products.csv<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;└── 📄 skus.csv<br />
-            &nbsp;&nbsp;├── 📁 002_牛仔裤/<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;├── 🖼️ 002.jpg<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;├── 📄 products.csv<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;└── 📄 skus.csv<br />
-          </code>
-        </div>
-      </div>
     </div>
   )
 }
 
-/** 步骤2：预览编辑视图 */
-function PreviewEditView({
+/** 步骤2：配置目标平台 */
+function ConfigTargetsView({
   products,
-  platform,
-  onPlatformChange,
-  profileId,
-  onProfileChange,
-  availableProfiles,
+  availableTargets,
+  viewMode,
+  onViewModeChange,
+  onToggleTarget,
+  onTogglePlatformAll,
   onEdit,
-  onToggle,
 }: {
   products: ProductData[]
-  platform: string
-  onPlatformChange: (v: string) => void
-  profileId: string
-  onProfileChange: (v: string) => void
-  availableProfiles: Array<{ id: string; name: string; platform: string }>
-  onEdit: (p: ProductData) => void
-  onToggle: (id: string) => void
+  availableTargets: TargetConfig[]
+  viewMode: 'grid' | 'matrix'
+  onViewModeChange: (mode: 'grid' | 'matrix') => void
+  onToggleTarget: (productId: string, targetKey: string) => void
+  onTogglePlatformAll: (targetKey: string, enabled: boolean) => void
+  onEdit: (product: ProductData) => void
 }): React.ReactElement {
+  if (viewMode === 'matrix') {
+    return (
+      <MatrixView
+        products={products}
+        availableTargets={availableTargets}
+        onToggleTarget={onToggleTarget}
+        onTogglePlatformAll={onTogglePlatformAll}
+        onEdit={onEdit}
+      />
+    )
+  }
+
   return (
     <div className="space-y-4">
-      {/* 筛选和设置 */}
+      {/* 视图切换和平台选择 */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <span className="text-sm">目标平台:</span>
-          <select
-            value={platform}
-            onChange={(e) => onPlatformChange(e.target.value)}
-            className="border rounded px-3 py-1.5 text-sm"
-          >
-            <option value="pinduoduo">拼多多</option>
-            <option value="douyin">抖音</option>
-            <option value="taobao">淘宝</option>
-            <option value="jd">京东</option>
-          </select>
-          
-          <span className="text-sm ml-4">店铺:</span>
-          <select
-            value={profileId}
-            onChange={(e) => onProfileChange(e.target.value)}
-            className="border rounded px-3 py-1.5 text-sm"
-          >
-            <option value="">默认店铺</option>
-            {availableProfiles
-              .filter(p => p.platform === platform)
-              .map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-          </select>
+        <div className="flex items-center gap-2">
+          <span className="text-sm">目标平台：</span>
+          {availableTargets.map(target => (
+            <Badge
+              key={`${target.platform}:${target.profileId}`}
+              variant={target.enabled ? 'default' : 'outline'}
+              className={cn(
+                'cursor-pointer',
+                target.enabled && 'bg-green-600'
+              )}
+            >
+              {target.platformName} / {target.profileName}
+            </Badge>
+          ))}
         </div>
-
-        <div className="flex items-center gap-2 text-sm">
-          <span>已配置:</span>
-          <Badge variant="outline" className="bg-green-50 text-green-700">
-            {products.filter(p => p.baseInfo?.title).length}
-          </Badge>
-          <span>/</span>
-          <Badge variant="outline">{products.length}</Badge>
+        
+        <div className="flex items-center gap-2">
+          <Button
+            variant={viewMode === 'grid' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => onViewModeChange('grid')}
+          >
+            <List className="h-4 w-4 mr-1" />
+            列表
+          </Button>
+          <Button
+            variant={viewMode === 'matrix' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => onViewModeChange('matrix')}
+          >
+            <Grid3x3 className="h-4 w-4 mr-1" />
+            矩阵
+          </Button>
         </div>
       </div>
 
       {/* 商品列表 */}
       <ScrollArea className="h-[450px]">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {products.map((product) => (
-            <ProductCard
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {products.map(product => (
+            <ProductConfigCard
               key={product.id}
               product={product}
+              availableTargets={availableTargets}
+              onToggleTarget={onToggleTarget}
               onEdit={() => onEdit(product)}
             />
           ))}
@@ -492,224 +521,365 @@ function PreviewEditView({
   )
 }
 
-/** 商品卡片 */
-function ProductCard({
+/** 商品配置卡片 */
+function ProductConfigCard({
   product,
+  availableTargets,
+  onToggleTarget,
   onEdit,
 }: {
   product: ProductData
+  availableTargets: TargetConfig[]
+  onToggleTarget: (productId: string, targetKey: string) => void
   onEdit: () => void
 }): React.ReactElement {
-  const hasBaseInfo = !!product.baseInfo?.title
-  const hasSkus = product.skus && product.skus.length > 0
-  const hasError = !!product.readError
+  const selectedCount = Array.from(product.targets.values()).filter(Boolean).length
 
   return (
-    <Card className={cn(
-      'overflow-hidden transition-colors hover:bg-muted/50',
-      hasError && 'border-red-300 bg-red-50/50'
-    )}>
-      {/* 顶部状态条 */}
+    <Card className="overflow-hidden">
       <div className={cn(
         'h-1',
-        hasBaseInfo ? 'bg-green-500' : hasError ? 'bg-red-400' : 'bg-yellow-400'
+        selectedCount > 0 ? 'bg-green-500' : 'bg-yellow-400'
       )} />
-
+      
       <CardContent className="p-4">
         <div className="flex gap-3">
-          {/* 图片预览 */}
-          <div className="w-20 h-20 flex-shrink-0">
+          <div className="w-16 h-16 flex-shrink-0">
             {product.images.length > 0 ? (
-              <div className="w-full h-full grid grid-cols-2 gap-0.5">
-                {product.images.slice(0, 4).map((img, i) => (
-                  <div key={i} className="bg-muted overflow-hidden rounded">
-                    <img
-                      src={`file://${img}`}
-                      alt=""
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                ))}
-              </div>
+              <img
+                src={`file://${product.images[0]}`}
+                alt=""
+                className="w-full h-full object-cover rounded"
+              />
             ) : (
               <div className="w-full h-full bg-muted rounded flex items-center justify-center">
-                <Image className="h-8 w-8 text-muted-foreground" />
+                <Image className="h-6 w-6 text-muted-foreground" />
               </div>
             )}
           </div>
 
-          {/* 信息 */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between">
-              <div className="flex-1 min-w-0">
-                <h4 className="font-medium truncate" title={product.baseInfo?.title || product.folderName}>
-                  {product.baseInfo?.title || product.folderName}
-                  {!hasBaseInfo && (
-                    <Badge variant="outline" className="ml-2 text-xs bg-yellow-50">未配置</Badge>
-                  )}
-                </h4>
-                {product.baseInfo?.price > 0 && (
-                  <p className="text-lg font-bold text-primary">
-                    ¥{product.baseInfo.price}
-                  </p>
-                )}
-              </div>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onEdit}>
-                <Edit3 className="h-4 w-4" />
-              </Button>
-            </div>
-
-            <div className="flex items-center gap-2 mt-2">
+            <h4 className="font-medium truncate">
+              {product.baseInfo?.title || product.folderName}
+            </h4>
+            <p className="text-sm text-primary font-bold">
+              {product.baseInfo?.price > 0 && `¥${product.baseInfo.price}`}
+            </p>
+            <div className="flex items-center gap-2 mt-1">
               <Badge variant="secondary" className="text-xs">
                 {product.imageCount} 图
               </Badge>
-              {product.hasProductsCsv && (
-                <Badge variant="outline" className="text-xs bg-green-50">参数</Badge>
-              )}
-              {hasSkus && (
-                <Badge variant="outline" className="text-xs bg-blue-50">
-                  SKU {product.skus!.length}
+              {selectedCount > 0 && (
+                <Badge variant="outline" className="text-xs bg-green-50">
+                  已选 {selectedCount}
                 </Badge>
               )}
             </div>
-
-            {hasError && (
-              <p className="text-xs text-red-500 mt-2">{product.readError}</p>
-            )}
           </div>
+
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onEdit}>
+            <Edit3 className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* 目标平台选择 */}
+        <div className="mt-3 pt-3 border-t space-y-2">
+          {availableTargets.map(target => {
+            const key = `${target.platform}:${target.profileId}`
+            const selected = product.targets.get(key)
+            return (
+              <div
+                key={key}
+                className="flex items-center gap-2 cursor-pointer"
+                onClick={() => onToggleTarget(product.id, key)}
+              >
+                {selected ? (
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Circle className="h-4 w-4 text-muted-foreground" />
+                )}
+                <span className="text-sm">
+                  {target.platformName} / {target.profileName}
+                </span>
+              </div>
+            )
+          })}
         </div>
       </CardContent>
     </Card>
   )
 }
 
-/** 商品编辑对话框 */
-function ProductEditDialog({
-  open,
-  onOpenChange,
-  product,
-  onChange,
-  onSave,
+/** 矩阵视图 */
+function MatrixView({
+  products,
+  availableTargets,
+  onToggleTarget,
+  onTogglePlatformAll,
+  onEdit,
 }: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  product: PreviewEditState | null
-  onChange: (state: PreviewEditState) => void
-  onSave: () => void
+  products: ProductData[]
+  availableTargets: TargetConfig[]
+  onToggleTarget: (productId: string, targetKey: string) => void
+  onTogglePlatformAll: (targetKey: string, enabled: boolean) => void
+  onEdit: (product: ProductData) => void
 }): React.ReactElement {
-  if (!product) return <></>
+  return (
+    <div className="space-y-4">
+      <ScrollArea className="h-[500px]">
+        <table className="w-full border-collapse">
+          <thead className="sticky top-0 bg-background z-10">
+            <tr>
+              <th className="text-left p-2 border-b w-48">商品</th>
+              {availableTargets.map(target => (
+                <th key={`${target.platform}:${target.profileId}`} className="p-2 border-b text-center min-w-[120px]">
+                  <div className="space-y-1">
+                    <div className="font-medium text-sm">{target.platformName}</div>
+                    <div className="text-xs text-muted-foreground">{target.profileName}</div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-xs w-full"
+                      onClick={() => {
+                        const selectedCount = products.filter(p => 
+                          p.targets.get(`${target.platform}:${target.profileId}`)
+                        ).length
+                        onTogglePlatformAll(
+                          `${target.platform}:${target.profileId}`,
+                          selectedCount < products.length
+                        )
+                      }}
+                    >
+                      全选/取消
+                    </Button>
+                  </div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {products.map(product => (
+              <tr key={product.id} className="hover:bg-muted/50">
+                <td className="p-2 border-b">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 flex-shrink-0">
+                      {product.images.length > 0 ? (
+                        <img
+                          src={`file://${product.images[0]}`}
+                          alt=""
+                          className="w-full h-full object-cover rounded"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-muted rounded" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm truncate">
+                        {product.baseInfo?.title || product.folderName}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        ¥{product.baseInfo?.price || 0}
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                {availableTargets.map(target => {
+                  const key = `${target.platform}:${target.profileId}`
+                  const selected = product.targets.get(key)
+                  return (
+                    <td key={key} className="p-2 border-b text-center">
+                      <button
+                        className={cn(
+                          'w-8 h-8 rounded-full flex items-center justify-center transition-colors mx-auto',
+                          selected
+                            ? 'bg-green-500 text-white'
+                            : 'bg-muted text-muted-foreground hover:bg-muted-foreground/20'
+                        )}
+                        onClick={() => onToggleTarget(product.id, key)}
+                      >
+                        {selected ? (
+                          <Check className="h-4 w-4" />
+                        ) : (
+                          <Plus className="h-4 w-4" />
+                        )}
+                      </button>
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="bg-muted/50">
+            <tr>
+              <td className="p-2 border-b font-medium">已选商品</td>
+              {availableTargets.map(target => {
+                const key = `${target.platform}:${target.profileId}`
+                const count = products.filter(p => p.targets.get(key)).length
+                return (
+                  <td key={key} className="p-2 border-b text-center">
+                    <Badge variant="outline">{count} 个</Badge>
+                  </td>
+                )
+              })}
+            </tr>
+          </tfoot>
+        </table>
+      </ScrollArea>
+    </div>
+  )
+}
+
+/** 步骤3：任务规划预览 */
+function PlanReviewView({
+  taskGroups,
+  onBack,
+}: {
+  taskGroups: TaskGroup[]
+  onBack: () => void
+}): React.ReactElement {
+  const totalTasks = taskGroups.reduce((sum, g) => sum + g.tasks.length, 0)
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="space-y-4">
+      <div className="bg-muted/50 rounded-lg p-4">
+        <h3 className="font-medium mb-2">任务规划摘要</h3>
+        <div className="grid grid-cols-3 gap-4 text-sm">
+          <div>
+            <span className="text-muted-foreground">任务组数：</span>
+            <span className="font-bold">{taskGroups.length}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">总任务数：</span>
+            <span className="font-bold">{totalTasks}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">并行店铺：</span>
+            <span className="font-bold">{taskGroups.length}</span>
+          </div>
+        </div>
+      </div>
+
+      <ScrollArea className="h-[400px]">
+        <div className="space-y-4">
+          {taskGroups.map(group => (
+            <Card key={group.id}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center justify-between">
+                  <span>{group.platformName} / {group.profileName}</span>
+                  <Badge variant="secondary">{group.tasks.length} 个任务</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {group.tasks.map((task, index) => (
+                    <div
+                      key={`${task.productId}-${index}`}
+                      className="flex items-center gap-3 p-2 bg-muted/50 rounded"
+                    >
+                      <div className="w-8 h-8 flex-shrink-0">
+                        {task.images.length > 0 ? (
+                          <img
+                            src={`file://${task.images[0]}`}
+                            alt=""
+                            className="w-full h-full object-cover rounded"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-muted rounded" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">
+                          {task.productName}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {task.images.length} 张图片
+                          {task.skus && task.skus.length > 0 && ` / ${task.skus.length} SKU`}
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="text-xs">
+                        待执行
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </ScrollArea>
+    </div>
+  )
+}
+
+/** 商品编辑对话框 */
+function ProductEditDialog({
+  product,
+  onChange,
+  onClose,
+}: {
+  product: ProductData
+  onChange: (product: ProductData) => void
+  onClose: () => void
+}): React.ReactElement {
+  return (
+    <Dialog open={true} onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>编辑商品信息</DialogTitle>
           <DialogDescription>{product.folderName}</DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto space-y-6 py-4">
-          {/* 图片预览 */}
-          <div>
-            <Label className="text-sm font-medium">商品图片 ({product.images.length} 张)</Label>
-            <div className="flex gap-2 mt-2 overflow-x-auto pb-2">
-              {product.images.map((img, i) => (
-                <div key={i} className="w-20 h-20 flex-shrink-0 rounded overflow-hidden border">
-                  <img src={`file://${img}`} alt="" className="w-full h-full object-cover" />
-                </div>
-              ))}
-            </div>
+        <div className="space-y-4 py-4">
+          <div className="flex gap-2 overflow-x-auto pb-2">
+            {product.images.map((img, i) => (
+              <div key={i} className="w-16 h-16 flex-shrink-0 rounded overflow-hidden border">
+                <img src={`file://${img}`} alt="" className="w-full h-full object-cover" />
+              </div>
+            ))}
           </div>
 
-          {/* 基础信息 */}
-          <div className="space-y-3">
-            <h4 className="font-medium flex items-center gap-2">
-              <Package className="h-4 w-4" />
-              基础信息
-            </h4>
-            
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2 space-y-1">
-                <Label className="text-xs">商品标题 *</Label>
-                <Input
-                  value={product.title}
-                  onChange={(e) => onChange({ ...product, title: e.target.value })}
-                  placeholder="输入商品标题"
-                />
-              </div>
-              
-              <div className="space-y-1">
-                <Label className="text-xs">价格 *</Label>
-                <Input
-                  type="number"
-                  value={product.price}
-                  onChange={(e) => onChange({ ...product, price: e.target.value })}
-                  placeholder="0.00"
-                />
-              </div>
-              
-              <div className="space-y-1">
-                <Label className="text-xs">产地</Label>
-                <Input
-                  value={product.origin}
-                  onChange={(e) => onChange({ ...product, origin: e.target.value })}
-                  placeholder="如：浙江"
-                />
-              </div>
-              
-              <div className="col-span-2 space-y-1">
-                <Label className="text-xs">商品描述</Label>
-                <Textarea
-                  value={product.description}
-                  onChange={(e) => onChange({ ...product, description: e.target.value })}
-                  placeholder="商品描述..."
-                  rows={3}
-                />
-              </div>
-            </div>
+          <div className="space-y-2">
+            <Label>商品标题</Label>
+            <Input
+              value={product.baseInfo?.title || ''}
+              onChange={(e) => onChange({
+                ...product,
+                baseInfo: { ...product.baseInfo!, title: e.target.value }
+              })}
+              placeholder="输入商品标题"
+            />
           </div>
 
-          {/* SKU 信息 */}
-          {product.skus.length > 0 && (
-            <div className="space-y-3">
-              <h4 className="font-medium flex items-center gap-2">
-                <Layers className="h-4 w-4" />
-                SKU 信息 ({product.skus.length})
-              </h4>
-              
-              <div className="border rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted">
-                    <tr>
-                      <th className="text-left p-2 font-medium">货号</th>
-                      <th className="text-left p-2 font-medium">库存</th>
-                      <th className="text-left p-2 font-medium">规格</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {product.skus.map((sku, i) => (
-                      <tr key={i} className="border-t">
-                        <td className="p-2">{sku.code}</td>
-                        <td className="p-2">{sku.stock}</td>
-                        <td className="p-2 text-muted-foreground">
-                          {[sku.color, sku.size].filter(Boolean).join(' / ') || '-'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>价格</Label>
+              <Input
+                type="number"
+                value={product.baseInfo?.price || ''}
+                onChange={(e) => onChange({
+                  ...product,
+                  baseInfo: { ...product.baseInfo!, price: parseFloat(e.target.value) || 0 }
+                })}
+                placeholder="0.00"
+              />
             </div>
-          )}
+            <div className="space-y-2">
+              <Label>产地</Label>
+              <Input
+                value={product.baseInfo?.origin || ''}
+                onChange={(e) => onChange({
+                  ...product,
+                  baseInfo: { ...product.baseInfo!, origin: e.target.value }
+                })}
+                placeholder="如：浙江"
+              />
+            </div>
+          </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            取消
-          </Button>
-          <Button onClick={onSave}>
-            <Check className="mr-2 h-4 w-4" />
-            保存
-          </Button>
+          <Button variant="outline" onClick={onClose}>取消</Button>
+          <Button onClick={onClose}>保存</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
