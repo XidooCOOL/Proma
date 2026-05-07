@@ -35,7 +35,7 @@ import { chatToolsAtom } from '@/atoms/chat-tool-atoms'
 import type { McpServerEntry, SkillMeta, OtherWorkspaceSkillsGroup, WorkspaceMcpConfig } from '@proma/shared'
 import { SettingsSection, SettingsCard, SettingsRow } from './primitives'
 import { McpServerForm } from './McpServerForm'
-import { EcommerceSettings } from './ecommerce'
+import { EcommerceSettings, EcommerceSetup } from './ecommerce'
 
 // ===== Types =====
 
@@ -573,7 +573,7 @@ ${skillList}
 
         {/* ===== Ecommerce Tab ===== */}
         <TabsContent value="ecommerce" className="mt-4">
-          <EcommerceSettings />
+          <EcommerceSetup />
         </TabsContent>
       </Tabs>
 

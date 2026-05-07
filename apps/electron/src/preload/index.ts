@@ -836,6 +836,23 @@ export interface ElectronAPI {
   onTrayOpenAgentSession: (callback: (data: TrayOpenAgentSessionData) => void) => () => void
   /** 订阅菜单栏创建会话事件 */
   onTrayCreateSession: (callback: (data: TrayCreateSessionData) => void) => () => void
+
+  // ===== 电商自动化 =====
+
+  /** 检查电商功能状态 */
+  checkEcommerceStatus: () => Promise<{ isEnabled: boolean; hasConfig: boolean; workspaceDir: string; error?: string }>
+
+  /** 一键安装电商功能 */
+  setupEcommerce: () => Promise<{ success: boolean; workspaceDir?: string; error?: string }>
+
+  /** 启动电商服务 */
+  startEcommerceServer: () => Promise<{ success: boolean; error?: string }>
+
+  /** 打开电商工作区目录 */
+  openEcommerceWorkspace: () => Promise<{ success: boolean; error?: string }>
+
+  /** 订阅电商安装进度事件 */
+  onEcommerceProgress: (callback: (progress: { step: string; message: string; progress: number; error?: string }) => void) => () => void
 }
 
 /**
@@ -1874,6 +1891,30 @@ const electronAPI: ElectronAPI = {
     const listener = (_: unknown, data: TrayCreateSessionData): void => callback(data)
     ipcRenderer.on(TRAY_IPC_CHANNELS.CREATE_SESSION, listener)
     return () => { ipcRenderer.removeListener(TRAY_IPC_CHANNELS.CREATE_SESSION, listener) }
+  },
+
+  // ===== 电商自动化 =====
+
+  checkEcommerceStatus: () => {
+    return ipcRenderer.invoke('ecommerce:check-status')
+  },
+
+  setupEcommerce: () => {
+    return ipcRenderer.invoke('ecommerce:setup')
+  },
+
+  startEcommerceServer: () => {
+    return ipcRenderer.invoke('ecommerce:start-server')
+  },
+
+  openEcommerceWorkspace: () => {
+    return ipcRenderer.invoke('ecommerce:open-workspace')
+  },
+
+  onEcommerceProgress: (callback: (progress: { step: string; message: string; progress: number; error?: string }) => void) => {
+    const listener = (_: unknown, progress: { step: string; message: string; progress: number; error?: string }) => callback(progress)
+    ipcRenderer.on('ecommerce:progress', listener)
+    return () => { ipcRenderer.removeListener('ecommerce:progress', listener) }
   },
 }
 
