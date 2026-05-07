@@ -961,6 +961,20 @@ export interface ElectronAPI {
 
   /** 从 Excel 导入商品 */
   importProductsFromExcel: (filePath: string) => Promise<{ success: boolean; products?: any[]; error?: string }>
+
+  // ===== 文件选择 =====
+
+  /** 选择图片文件夹 */
+  selectImageFolders: (includeSubfolders: boolean) => Promise<{ success: boolean; folders?: any[] }>
+
+  /** 选择 Excel 文件 */
+  selectExcelFile: () => Promise<{ success: boolean; filePath?: string }>
+
+  /** 读取 Excel 数据 */
+  readExcelData: (filePath: string) => Promise<{ success: boolean; rows?: string[][]; rowCount?: number; error?: string }>
+
+  /** 扫描商品文件夹 */
+  scanProductFolders: (rootPath: string) => Promise<{ success: boolean; products?: any[]; totalFolders?: number; error?: string }>
 }
 
 /**
@@ -2151,6 +2165,24 @@ const electronAPI: ElectronAPI = {
 
   importProductsFromExcel: (filePath: string) => {
     return ipcRenderer.invoke('product:import-excel', filePath)
+  },
+
+  // ===== 文件选择 =====
+
+  selectImageFolders: (includeSubfolders: boolean) => {
+    return ipcRenderer.invoke('file:select-image-folders', includeSubfolders)
+  },
+
+  selectExcelFile: () => {
+    return ipcRenderer.invoke('file:select-excel')
+  },
+
+  readExcelData: (filePath: string) => {
+    return ipcRenderer.invoke('file:read-excel', filePath)
+  },
+
+  scanProductFolders: (rootPath: string) => {
+    return ipcRenderer.invoke('file:scan-product-folders', rootPath)
   },
 }
 

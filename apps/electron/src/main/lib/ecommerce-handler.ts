@@ -1177,7 +1177,166 @@ function registerFileSelectorHandlers(): void {
   console.log('[FileSelector] IPC 处理器已注册')
 }
 
-// 注册文件选择处理器
-registerFileSelectorHandlers()
+// ===== 商品文件夹扫描 =====
+
+/**
+ * 扫描商品文件夹
+ * 每个子文件夹 = 一个商品
+ * 子文件夹内包含 products.csv 和 skus.csv
+ */
+function registerProductScannerHandlers(): void {
+  // 扫描商品文件夹
+  ipcMain.handle('file:scan-product-folders', async (_, rootPath: string) => {
+    try {
+      const fs = require('fs')
+      const path = require('path')
+
+      const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
+      const products: any[] = []
+
+      // 读取根目录下的子文件夹
+      const entries = fs.readdirSync(rootPath, { withFileTypes: true })
+
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue
+
+        const folderPath = path.join(rootPath, entry.name)
+        const folderName = entry.name
+
+        // 读取图片
+        const files = fs.readdirSync(folderPath)
+        const images: string[] = []
+        let hasProductsCsv = false
+        let hasSkusCsv = false
+
+        for (const file of files) {
+          const ext = path.extname(file).toLowerCase()
+          const fullPath = path.join(folderPath, file)
+
+          if (imageExtensions.includes(ext)) {
+            images.push(fullPath)
+          } else if (file === 'products.csv' || file === 'products.xlsx') {
+            hasProductsCsv = true
+          } else if (file === 'skus.csv' || file === 'skus.xlsx') {
+            hasSkusCsv = true
+          }
+        }
+
+        // 按文件名排序图片
+        images.sort()
+
+        // 解析 products.csv
+        let baseInfo: any = undefined
+        if (hasProductsCsv) {
+          try {
+            const productsFile = path.join(folderPath, 'products.csv')
+            if (fs.existsSync(productsFile)) {
+              const content = fs.readFileSync(productsFile, 'utf-8')
+              const lines = content.split('\n').filter(l => l.trim())
+              if (lines.length >= 2) {
+                // 解析表头
+                const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase())
+                
+                // 解析第一行数据
+                const values = lines[1].split(',').map(v => v.trim().replace(/^"|"$/g, ''))
+
+                const rowData: Record<string, string> = {}
+                headers.forEach((h, i) => {
+                  rowData[h] = values[i] || ''
+                })
+
+                baseInfo = {
+                  title: rowData['title'] || rowData['名称'] || folderName,
+                  price: parseFloat(rowData['price'] || rowData['价格'] || '0') || 0,
+                  origin: rowData['origin'] || rowData['产地'] || '',
+                  description: rowData['description'] || rowData['描述'] || '',
+                  freight: rowData['freight'] || rowData['运费'] || '',
+                  weight: rowData['weight'] || rowData['重量'] || '',
+                  brand: rowData['brand'] || rowData['品牌'] || '',
+                  category: rowData['category'] || rowData['类目'] || '',
+                }
+              }
+            } else {
+              // 尝试 xlsx
+              const productsXlsx = path.join(folderPath, 'products.xlsx')
+              if (fs.existsSync(productsXlsx)) {
+                hasProductsCsv = true
+              }
+            }
+          } catch (e) {
+            console.error('[Scanner] 读取 products.csv 失败:', e)
+          }
+        }
+
+        // 解析 skus.csv
+        let skus: any[] = []
+        if (hasSkusCsv) {
+          try {
+            const skusFile = path.join(folderPath, 'skus.csv')
+            if (fs.existsSync(skusFile)) {
+              const content = fs.readFileSync(skusFile, 'utf-8')
+              const lines = content.split('\n').filter(l => l.trim())
+              
+              if (lines.length >= 2) {
+                // 解析表头
+                const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase())
+
+                // 解析数据行
+                for (let i = 1; i < lines.length; i++) {
+                  const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''))
+                  
+                  const rowData: Record<string, string> = {}
+                  headers.forEach((h, j) => {
+                    rowData[h] = values[j] || ''
+                  })
+
+                  skus.push({
+                    code: rowData['code'] || rowData['货号'] || rowData['sku'] || `SKU-${i}`,
+                    stock: parseInt(rowData['stock'] || rowData['库存'] || '0') || 0,
+                    price: parseFloat(rowData['price'] || rowData['价格'] || '0') || undefined,
+                    color: rowData['color'] || rowData['颜色'] || '',
+                    size: rowData['size'] || rowData['尺码'] || '',
+                  })
+                }
+              }
+            }
+          } catch (e) {
+            console.error('[Scanner] 读取 skus.csv 失败:', e)
+          }
+        }
+
+        products.push({
+          id: `product-${Date.now()}-${products.length}`,
+          folderPath,
+          folderName,
+          images,
+          imageCount: images.length,
+          baseInfo,
+          skus,
+          hasProductsCsv,
+          hasSkusCsv,
+        })
+      }
+
+      return {
+        success: true,
+        products,
+        totalFolders: products.length,
+      }
+    } catch (error) {
+      console.error('[ProductScanner] 扫描失败:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '扫描失败',
+        products: [],
+      }
+    }
+  })
+
+  console.log('[ProductScanner] IPC 处理器已注册')
+}
+
+// 注册商品扫描处理器
+registerProductScannerHandlers()
 
 console.log('[Selector] IPC 处理器已注册')
