@@ -15,7 +15,7 @@
 import * as React from 'react'
 import {
   FolderOpen,
-  Image,
+  Image as ImageIcon,
   Check,
   ChevronRight,
   ChevronLeft,
@@ -34,6 +34,7 @@ import {
   CheckCircle2,
   Circle,
   XCircle,
+  X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -553,7 +554,7 @@ function ProductConfigCard({
               />
             ) : (
               <div className="w-full h-full bg-muted rounded flex items-center justify-center">
-                <Image className="h-6 w-6 text-muted-foreground" />
+                <ImageIcon className="h-6 w-6 text-muted-foreground" />
               </div>
             )}
           </div>
@@ -821,66 +822,389 @@ function ProductEditDialog({
   onChange: (product: ProductData) => void
   onClose: () => void
 }): React.ReactElement {
+  const [previewImage, setPreviewImage] = React.useState<string | null>(null)
+  const [previewIndex, setPreviewIndex] = React.useState(0)
+
+  const openPreview = (img: string, index: number) => {
+    setPreviewImage(img)
+    setPreviewIndex(index)
+  }
+
+  const closePreview = () => {
+    setPreviewImage(null)
+  }
+
+  const prevImage = () => {
+    if (previewImage && product.images.length > 0) {
+      const currentIdx = product.images.indexOf(previewImage)
+      const newIdx = currentIdx > 0 ? currentIdx - 1 : product.images.length - 1
+      setPreviewImage(product.images[newIdx])
+      setPreviewIndex(newIdx)
+    }
+  }
+
+  const nextImage = () => {
+    if (previewImage && product.images.length > 0) {
+      const currentIdx = product.images.indexOf(previewImage)
+      const newIdx = currentIdx < product.images.length - 1 ? currentIdx + 1 : 0
+      setPreviewImage(product.images[newIdx])
+      setPreviewIndex(newIdx)
+    }
+  }
+
   return (
-    <Dialog open={true} onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>编辑商品信息</DialogTitle>
-          <DialogDescription>{product.folderName}</DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={true} onOpenChange={() => onClose()}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>编辑商品信息</DialogTitle>
+            <DialogDescription>{product.folderName}</DialogDescription>
+          </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            {product.images.map((img, i) => (
-              <div key={i} className="w-16 h-16 flex-shrink-0 rounded overflow-hidden border">
-                <img src={`file://${img}`} alt="" className="w-full h-full object-cover" />
+          <div className="flex-1 overflow-y-auto space-y-6 py-4">
+            {/* 图片预览区 */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">
+                  商品图片 ({product.images.length} 张)
+                </Label>
+                <span className="text-xs text-muted-foreground">
+                  点击图片可放大预览
+                </span>
               </div>
-            ))}
+              
+              {/* 主图预览 */}
+              {product.images.length > 0 && (
+                <div 
+                  className="relative aspect-video bg-muted rounded-lg overflow-hidden cursor-pointer group"
+                  onClick={() => openPreview(product.images[0], 0)}
+                >
+                  <img
+                    src={`file://${product.images[0]}`}
+                    alt=""
+                    className="w-full h-full object-contain"
+                  />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                    <Eye className="h-8 w-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                  <Badge className="absolute top-2 left-2 bg-black/50">主图</Badge>
+                </div>
+              )}
+              
+              {/* 缩略图列表 */}
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {product.images.map((img, i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      'relative w-20 h-20 flex-shrink-0 rounded overflow-hidden cursor-pointer border-2 transition-colors',
+                      i === 0 ? 'border-primary' : 'border-transparent hover:border-muted-foreground/30'
+                    )}
+                    onClick={() => openPreview(img, i)}
+                  >
+                    <img
+                      src={`file://${img}`}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors flex items-center justify-center">
+                      <Eye className="h-4 w-4 text-white opacity-0 hover:opacity-100 transition-opacity" />
+                    </div>
+                    <Badge variant="secondary" className="absolute bottom-1 right-1 text-xs px-1 py-0">
+                      {i + 1}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 基础信息 */}
+            <div className="space-y-3">
+              <h4 className="font-medium flex items-center gap-2">
+                <Package className="h-4 w-4" />
+                基础信息
+              </h4>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2 space-y-1">
+                  <Label className="text-xs">商品标题 *</Label>
+                  <Input
+                    value={product.baseInfo?.title || ''}
+                    onChange={(e) => onChange({
+                      ...product,
+                      baseInfo: { ...product.baseInfo!, title: e.target.value }
+                    })}
+                    placeholder="输入商品标题"
+                  />
+                </div>
+                
+                <div className="space-y-1">
+                  <Label className="text-xs">价格 *</Label>
+                  <Input
+                    type="number"
+                    value={product.baseInfo?.price || ''}
+                    onChange={(e) => onChange({
+                      ...product,
+                      baseInfo: { ...product.baseInfo!, price: parseFloat(e.target.value) || 0 }
+                    })}
+                    placeholder="0.00"
+                  />
+                </div>
+                
+                <div className="space-y-1">
+                  <Label className="text-xs">产地</Label>
+                  <Input
+                    value={product.baseInfo?.origin || ''}
+                    onChange={(e) => onChange({
+                      ...product,
+                      baseInfo: { ...product.baseInfo!, origin: e.target.value }
+                    })}
+                    placeholder="如：浙江"
+                  />
+                </div>
+                
+                <div className="col-span-2 space-y-1">
+                  <Label className="text-xs">商品描述</Label>
+                  <Textarea
+                    value={product.baseInfo?.description || ''}
+                    onChange={(e) => onChange({
+                      ...product,
+                      baseInfo: { ...product.baseInfo!, description: e.target.value }
+                    })}
+                    placeholder="商品描述..."
+                    rows={3}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* SKU 信息 */}
+            {product.skus && product.skus.length > 0 && (
+              <div className="space-y-3">
+                <h4 className="font-medium flex items-center gap-2">
+                  <Layers className="h-4 w-4" />
+                  SKU 信息 ({product.skus.length})
+                </h4>
+                
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted">
+                      <tr>
+                        <th className="text-left p-2 font-medium">#</th>
+                        <th className="text-left p-2 font-medium">货号</th>
+                        <th className="text-left p-2 font-medium">库存</th>
+                        <th className="text-left p-2 font-medium">规格</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {product.skus.map((sku, i) => (
+                        <tr key={i} className="border-t">
+                          <td className="p-2 text-muted-foreground">{i + 1}</td>
+                          <td className="p-2">{sku.code}</td>
+                          <td className="p-2">{sku.stock}</td>
+                          <td className="p-2 text-muted-foreground">
+                            {[sku.color, sku.size].filter(Boolean).join(' / ') || '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="space-y-2">
-            <Label>商品标题</Label>
-            <Input
-              value={product.baseInfo?.title || ''}
-              onChange={(e) => onChange({
-                ...product,
-                baseInfo: { ...product.baseInfo!, title: e.target.value }
-              })}
-              placeholder="输入商品标题"
-            />
-          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={onClose}>取消</Button>
+            <Button onClick={onClose}>保存</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>价格</Label>
-              <Input
-                type="number"
-                value={product.baseInfo?.price || ''}
-                onChange={(e) => onChange({
-                  ...product,
-                  baseInfo: { ...product.baseInfo!, price: parseFloat(e.target.value) || 0 }
-                })}
-                placeholder="0.00"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>产地</Label>
-              <Input
-                value={product.baseInfo?.origin || ''}
-                onChange={(e) => onChange({
-                  ...product,
-                  baseInfo: { ...product.baseInfo!, origin: e.target.value }
-                })}
-                placeholder="如：浙江"
-              />
-            </div>
+      {/* 全屏图片预览 */}
+      <ImagePreviewDialog
+        open={!!previewImage}
+        image={previewImage}
+        currentIndex={previewIndex}
+        totalCount={product.images.length}
+        onClose={closePreview}
+        onPrev={prevImage}
+        onNext={nextImage}
+        folderName={product.folderName}
+      />
+    </>
+  )
+}
+
+/** 全屏图片预览对话框 */
+function ImagePreviewDialog({
+  open,
+  image,
+  currentIndex,
+  totalCount,
+  onClose,
+  onPrev,
+  onNext,
+  folderName,
+}: {
+  open: boolean
+  image: string | null
+  currentIndex: number
+  totalCount: number
+  onClose: () => void
+  onPrev: () => void
+  onNext: () => void
+  folderName: string
+}): React.ReactElement {
+  const [scale, setScale] = React.useState(1)
+  const [loading, setLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    if (open) {
+      setLoading(true)
+      setScale(1)
+    }
+  }, [open, image])
+
+  // 键盘快捷键
+  React.useEffect(() => {
+    if (!open) return
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      switch (e.key) {
+        case 'Escape':
+          onClose()
+          break
+        case 'ArrowLeft':
+          onPrev()
+          break
+        case 'ArrowRight':
+          onNext()
+          break
+        case '+':
+        case '=':
+          setScale(s => Math.min(s + 0.25, 3))
+          break
+        case '-':
+          setScale(s => Math.max(s - 0.25, 0.5))
+          break
+        case '0':
+          setScale(1)
+          break
+      }
+    }
+    
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [open, onClose, onPrev, onNext])
+
+  if (!open || !image) return <></>
+
+  return (
+    <Dialog open={open} onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/95 border-none overflow-hidden">
+        {/* 顶部工具栏 */}
+        <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-4 bg-gradient-to-b from-black/50 to-transparent">
+          <div className="text-white">
+            <p className="font-medium">{folderName}</p>
+            <p className="text-sm text-white/70">
+              {currentIndex + 1} / {totalCount}
+            </p>
           </div>
+          
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-white hover:bg-white/20"
+              onClick={() => setScale(s => Math.max(s - 0.25, 0.5))}
+            >
+              <Minus className="h-4 w-4" />
+            </Button>
+            <span className="text-white text-sm w-12 text-center">
+              {Math.round(scale * 100)}%
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-white hover:bg-white/20"
+              onClick={() => setScale(s => Math.min(s + 0.25, 3))}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-white hover:bg-white/20 ml-2"
+              onClick={() => setScale(1)}
+            >
+              <span className="text-xs">1:1</span>
+            </Button>
+          </div>
+          
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-white hover:bg-white/20"
+            onClick={onClose}
+          >
+            <X className="h-5 w-5" />
+          </Button>
         </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button onClick={onClose}>保存</Button>
-        </DialogFooter>
+        
+        {/* 图片区域 */}
+        <div 
+          className="w-full h-full flex items-center justify-center overflow-auto"
+          onClick={(e) => e.target === e.currentTarget && onClose()}
+        >
+          {loading && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Loader2 className="h-8 w-8 text-white animate-spin" />
+            </div>
+          )}
+          <img
+            src={`file://${image}`}
+            alt=""
+            className="max-w-none transition-transform"
+            style={{ 
+              transform: `scale(${scale})`,
+              maxHeight: '90vh',
+              maxWidth: '90vw'
+            }}
+            onLoad={() => setLoading(false)}
+          />
+        </div>
+        
+        {/* 底部导航 */}
+        <div className="absolute bottom-0 left-0 right-0 z-10 flex items-center justify-between p-4 bg-gradient-to-t from-black/50 to-transparent">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-white hover:bg-white/20"
+            onClick={onPrev}
+          >
+            <ChevronLeft className="h-6 w-6" />
+          </Button>
+          
+          {/* 缩略图条 */}
+          <div className="flex items-center gap-1 overflow-x-auto max-w-[60vw]">
+            {/* 缩略图由父组件控制显示 */}
+          </div>
+          
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-white hover:bg-white/20"
+            onClick={onNext}
+          >
+            <ChevronRight className="h-6 w-6" />
+          </Button>
+        </div>
+        
+        {/* 快捷键提示 */}
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/50 text-xs">
+          ← → 切换图片 | 滚轮缩放 | ESC 关闭
+        </div>
       </DialogContent>
     </Dialog>
   )
