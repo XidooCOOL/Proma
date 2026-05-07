@@ -4,7 +4,7 @@
  * 这些选择器在多个平台间通用，可以复用
  */
 
-import { PageSelectors, PLATFORM_CONFIG } from './types'
+import { PageSelectors, PLATFORM_CONFIG } from '../types'
 
 export const commonLogin: PageSelectors = {
   page: '通用登录页面',

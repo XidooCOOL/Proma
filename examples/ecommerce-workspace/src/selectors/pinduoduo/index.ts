@@ -2,7 +2,7 @@
  * 拼多多选择器库
  */
 
-import { PageSelectors, PLATFORM_CONFIG } from './types'
+import { PageSelectors, PLATFORM_CONFIG } from '../types'
 
 export const pinduoduoLogin: PageSelectors = {
   page: '登录页面',

@@ -10,7 +10,7 @@
 export type Platform = 'pinduoduo' | 'douyin' | 'taobao' | 'jd' | 'kuaishou'
 
 export type ElementType = 'input' | 'button' | 'select' | 'checkbox' | 'radio' | 
-  'file' | 'dialog' | 'link' | 'table' | 'list' | 'container' | 'iframe'
+  'file' | 'dialog' | 'link' | 'table' | 'list' | 'container' | 'iframe' | 'tab'
 
 export type ActionType = 'click' | 'fill' | 'select' | 'check' | 'uncheck' | 
   'upload' | 'hover' | 'dblclick' | 'wait' | 'screenshot' | 'evaluate'
@@ -26,7 +26,7 @@ export interface Selector {
   type: ElementType
   
   /** 元素描述 */
-  description: string
+  description?: string
   
   /** 是否必需 */
   required?: boolean

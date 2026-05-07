@@ -298,9 +298,9 @@ export class EcommerceWorkflowEngine implements WorkflowEngine {
       }
       
       case 'gotoEnd': {
-        const targetStep = step.params?.gotoStep
-        if (targetStep) {
-          const targetIndex = this.execution!.workflow.steps.findIndex(s => s.id === targetStep)
+        const targetStep = (step.condition as any)?.gotoStep
+        if (targetStep && this.execution) {
+          const targetIndex = this.execution.workflow.steps.findIndex(s => s.id === targetStep)
           if (targetIndex > 0) {
             this.execution.currentStepIndex = targetIndex - 1
           }
