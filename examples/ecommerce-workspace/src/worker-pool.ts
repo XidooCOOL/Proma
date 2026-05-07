@@ -1,0 +1,301 @@
+/**
+ * Worker Pool - 任务执行器池
+ * 
+ * 负责：
+ * 1. 管理多个 Worker
+ * 2. 分配任务到 Worker
+ * 3. 协调并行执行
+ */
+
+import EventEmitter from 'events'
+import {
+  Task,
+  TaskGroup,
+  Worker,
+  WorkerConfig,
+  WorkerStatus,
+  WorkerType,
+  Platform,
+} from '../types'
+import { OperationWorker } from './workers/operation-worker'
+import { CollectionWorker } from './workers/collection-worker'
+
+export interface WorkerPoolConfig {
+  maxOperationWorkers: number
+  maxCollectionWorkers: number
+  defaultTimeout: number
+  enableRetry: boolean
+  maxRetries: number
+}
+
+const defaultConfig: WorkerPoolConfig = {
+  maxOperationWorkers: 5,
+  maxCollectionWorkers: 2,
+  defaultTimeout: 60000,
+  enableRetry: true,
+  maxRetries: 3,
+}
+
+export class WorkerPool extends EventEmitter {
+  private config: WorkerPoolConfig
+  private operationWorkers: OperationWorker[] = []
+  private collectionWorkers: CollectionWorker[] = []
+  private taskQueue: Map<string, Task> = new Map()
+  private executingTasks: Map<string, Task> = new Map()
+  private browserProfiles: Map<string, any> = new Map()
+
+  constructor(config: Partial<WorkerPoolConfig> = {}) {
+    super()
+    this.config = { ...defaultConfig, ...config }
+    this.initializeWorkers()
+  }
+
+  /**
+   * 初始化 Workers
+   */
+  private initializeWorkers(): void {
+    console.log(`[WorkerPool] 初始化 Workers...`)
+
+    // 初始化运营 Workers
+    for (let i = 0; i < this.config.maxOperationWorkers; i++) {
+      const worker = new OperationWorker({
+        id: `operation-worker-${i}`,
+        maxConcurrentTasks: 1,
+        timeout: this.config.defaultTimeout,
+        retryEnabled: this.config.enableRetry,
+        maxRetries: this.config.maxRetries
+      })
+      
+      this.setupWorkerEvents(worker)
+      this.operationWorkers.push(worker)
+    }
+
+    // 初始化采集 Workers
+    for (let i = 0; i < this.config.maxCollectionWorkers; i++) {
+      const worker = new CollectionWorker({
+        id: `collection-worker-${i}`,
+        maxConcurrentTasks: 1,
+        timeout: this.config.defaultTimeout,
+        retryEnabled: this.config.enableRetry,
+        maxRetries: this.config.maxRetries
+      })
+
+      this.setupWorkerEvents(worker)
+      this.collectionWorkers.push(worker)
+    }
+
+    console.log(`[WorkerPool] 初始化完成: ${this.operationWorkers.length} 个运营 Worker, ${this.collectionWorkers.length} 个采集 Worker`)
+  }
+
+  /**
+   * 设置 Worker 事件
+   */
+  private setupWorkerEvents(worker: OperationWorker | CollectionWorker): void {
+    worker.on('task-start', (data: any) => {
+      this.emit('worker:task-start', data)
+    })
+
+    worker.on('task-progress', (data: any) => {
+      this.emit('worker:task-progress', data)
+    })
+
+    worker.on('task-complete', (data: any) => {
+      this.executingTasks.delete(data.task.id)
+      this.emit('worker:task-complete', data)
+    })
+
+    worker.on('task-failed', (data: any) => {
+      this.executingTasks.delete(data.task.id)
+      this.emit('worker:task-failed', data)
+    })
+  }
+
+  /**
+   * 执行任务
+   */
+  async executeTask(sessionId: string, groupId: string, task: Task): Promise<any> {
+    console.log(`[WorkerPool] 执行任务: ${task.id} (${task.type} - ${task.action})`)
+
+    this.taskQueue.set(task.id, task)
+    this.emit('worker:task-start', { sessionId, groupId, task })
+
+    try {
+      let worker: OperationWorker | CollectionWorker | undefined
+
+      if (task.type === 'operation') {
+        worker = this.getAvailableOperationWorker(task.target.platform)
+      } else if (task.type === 'collection') {
+        worker = this.getAvailableCollectionWorker()
+      }
+
+      if (!worker) {
+        throw new Error('没有可用的 Worker')
+      }
+
+      task.status = 'running'
+      task.startedAt = Date.now()
+      task.workerId = worker.id
+
+      this.executingTasks.set(task.id, task)
+
+      const result = await worker.execute(task)
+
+      task.status = 'completed'
+      task.progress = 100
+      task.result = {
+        success: true,
+        data: result,
+        timestamp: Date.now(),
+        duration: Date.now() - (task.startedAt || Date.now())
+      }
+      task.completedAt = Date.now()
+
+      this.emit('worker:task-complete', { sessionId, groupId, task, result })
+
+      return result
+    } catch (error) {
+      task.status = 'failed'
+      task.result = {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        timestamp: Date.now()
+      }
+
+      this.emit('worker:task-failed', {
+        sessionId,
+        groupId,
+        task,
+        error: error instanceof Error ? error.message : String(error)
+      })
+
+      throw error
+    } finally {
+      this.taskQueue.delete(task.id)
+    }
+  }
+
+  /**
+   * 获取可用的运营 Worker
+   */
+  private getAvailableOperationWorker(platform?: Platform): OperationWorker | undefined {
+    return this.operationWorkers.find(w => w.status === 'idle')
+  }
+
+  /**
+   * 获取可用的采集 Worker
+   */
+  private getAvailableCollectionWorker(): CollectionWorker | undefined {
+    return this.collectionWorkers.find(w => w.status === 'idle')
+  }
+
+  /**
+   * 并行执行多个任务
+   */
+  async executeTasksParallel(sessionId: string, groupId: string, tasks: Task[]): Promise<any[]> {
+    console.log(`[WorkerPool] 并行执行 ${tasks.length} 个任务`)
+
+    const promises = tasks.map(task => 
+      this.executeTask(sessionId, groupId, task).catch(error => ({
+        taskId: task.id,
+        success: false,
+        error: error.message
+      }))
+    )
+
+    return Promise.all(promises)
+  }
+
+  /**
+   * 获取 Worker 状态
+   */
+  getWorkerStatus(): any {
+    return {
+      operationWorkers: this.operationWorkers.map(w => ({
+        id: w.id,
+        status: w.status,
+        currentTask: w.currentTask?.id,
+        platform: w.platform
+      })),
+      collectionWorkers: this.collectionWorkers.map(w => ({
+        id: w.id,
+        status: w.status,
+        currentTask: w.currentTask?.id
+      })),
+      queueSize: this.taskQueue.size,
+      executingSize: this.executingTasks.size
+    }
+  }
+
+  /**
+   * 注册浏览器 Profile
+   */
+  registerBrowserProfile(profileId: string, profile: any): void {
+    this.browserProfiles.set(profileId, profile)
+  }
+
+  /**
+   * 获取浏览器 Profile
+   */
+  getBrowserProfile(profileId: string): any {
+    return this.browserProfiles.get(profileId)
+  }
+
+  /**
+   * 暂停 Worker
+   */
+  pauseWorker(workerId: string): void {
+    const worker = this.findWorker(workerId)
+    if (worker) {
+      worker.pause()
+    }
+  }
+
+  /**
+   * 恢复 Worker
+   */
+  resumeWorker(workerId: string): void {
+    const worker = this.findWorker(workerId)
+    if (worker) {
+      worker.resume()
+    }
+  }
+
+  /**
+   * 查找 Worker
+   */
+  private findWorker(workerId: string): OperationWorker | CollectionWorker | undefined {
+    return [
+      ...this.operationWorkers,
+      ...this.collectionWorkers
+    ].find(w => w.id === workerId)
+  }
+
+  /**
+   * 清理资源
+   */
+  async cleanup(): Promise<void> {
+    console.log(`[WorkerPool] 清理资源...`)
+
+    for (const worker of this.operationWorkers) {
+      await worker.cleanup()
+    }
+
+    for (const worker of this.collectionWorkers) {
+      await worker.cleanup()
+    }
+
+    this.browserProfiles.clear()
+    this.taskQueue.clear()
+    this.executingTasks.clear()
+
+    console.log(`[WorkerPool] 资源清理完成`)
+  }
+
+  /**
+   * 销毁
+   */
+  destroy(): void {
+    this.cleanup()
+    this.removeAllListeners()
+  }
+}
