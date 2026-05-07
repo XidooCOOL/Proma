@@ -1043,6 +1043,26 @@ export interface ElectronAPI {
 
   /** 按 Profile 获取任务日志 */
   getTaskLogsByProfile: (profileId: string, limit?: number) => Promise<any[]>
+
+  // ===== 预定义元素 & 映射 =====
+
+  /** 获取所有预定义元素 */
+  getPredefinedElements: () => Promise<{ elements: any; allIds: string[] }>
+
+  /** 获取单个元素信息 */
+  getElementInfo: (elementId: string) => Promise<any>
+
+  /** 获取平台默认映射 */
+  getPlatformMapping: (platform: string) => Promise<any>
+
+  /** 保存平台映射 */
+  savePlatformMapping: (platform: string, mapping: any) => Promise<{ success: boolean }>
+
+  /** 加载平台映射 */
+  loadPlatformMapping: (platform: string) => Promise<any>
+
+  /** 提取页面元素 */
+  extractElements: (platform: string, profileId: string, elementIds: string[], pageUrl?: string) => Promise<any>
 }
 
 /**
@@ -2341,6 +2361,32 @@ const electronAPI: ElectronAPI = {
 
   getTaskLogsByProfile: (profileId: string, limit?: number) => {
     return ipcRenderer.invoke('ecommerce:get-task-logs-by-profile', profileId, limit)
+  },
+
+  // ===== 预定义元素 & 映射 =====
+
+  getPredefinedElements: () => {
+    return ipcRenderer.invoke('ecommerce:get-predefined-elements')
+  },
+
+  getElementInfo: (elementId: string) => {
+    return ipcRenderer.invoke('ecommerce:get-element-info', elementId)
+  },
+
+  getPlatformMapping: (platform: string) => {
+    return ipcRenderer.invoke('ecommerce:get-platform-mapping', platform)
+  },
+
+  savePlatformMapping: (platform: string, mapping: any) => {
+    return ipcRenderer.invoke('ecommerce:save-platform-mapping', platform, mapping)
+  },
+
+  loadPlatformMapping: (platform: string) => {
+    return ipcRenderer.invoke('ecommerce:load-platform-mapping', platform)
+  },
+
+  extractElements: (platform: string, profileId: string, elementIds: string[], pageUrl?: string) => {
+    return ipcRenderer.invoke('ecommerce:extract-elements', platform, profileId, elementIds, pageUrl)
   },
 }
 

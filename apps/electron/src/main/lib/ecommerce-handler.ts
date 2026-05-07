@@ -1453,7 +1453,150 @@ export function registerEcommerceDataHandlers(): void {
     return getTaskLogService().getByProfile(profileId, limit)
   })
 
+  // ===== 元素提取处理器 =====
+
+  ipcMain.handle('ecommerce:get-predefined-elements', async () => {
+    const { PREDEFINED_ELEMENTS, ALL_PREDEFINED_IDS } = require('./ecommerce-elements')
+    return {
+      elements: PREDEFINED_ELEMENTS,
+      allIds: ALL_PREDEFINED_IDS,
+    }
+  })
+
+  ipcMain.handle('ecommerce:get-element-info', async (_, elementId: string) => {
+    const { getElementById } = require('./ecommerce-elements')
+    return getElementById(elementId)
+  })
+
+  ipcMain.handle('ecommerce:get-platform-mapping', async (_, platform: string) => {
+    const { DEFAULT_PLATFORM_MAPPINGS, createDefaultMapping } = require('./ecommerce-elements')
+    return DEFAULT_PLATFORM_MAPPINGS[platform] || createDefaultMapping(platform)
+  })
+
+  ipcMain.handle('ecommerce:save-platform-mapping', async (_, platform: string, mapping: any) => {
+    const fs = require('fs')
+    const path = require('path')
+    const { app } = require('electron')
+    const mappingDir = path.join(app.getPath('userData'), 'ecommerce', 'mappings')
+    if (!fs.existsSync(mappingDir)) {
+      fs.mkdirSync(mappingDir, { recursive: true })
+    }
+    const filePath = path.join(mappingDir, `${platform}.json`)
+    fs.writeFileSync(filePath, JSON.stringify(mapping, null, 2), 'utf-8')
+    return { success: true }
+  })
+
+  ipcMain.handle('ecommerce:load-platform-mapping', async (_, platform: string) => {
+    const fs = require('fs')
+    const path = require('path')
+    const { app } = require('electron')
+    const filePath = path.join(app.getPath('userData'), 'ecommerce', 'mappings', `${platform}.json`)
+    if (fs.existsSync(filePath)) {
+      return JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+    }
+    const { DEFAULT_PLATFORM_MAPPINGS, createDefaultMapping } = require('./ecommerce-elements')
+    return DEFAULT_PLATFORM_MAPPINGS[platform] || createDefaultMapping(platform)
+  })
+
+  ipcMain.handle('ecommerce:extract-elements', async (_, platform: string, profileId: string, elementIds: string[], pageUrl?: string) => {
+    const profiles = loadProfiles()
+    const profile = profiles.find(p => p.id === profileId)
+    if (!profile) {
+      throw new Error('Profile 不存在')
+    }
+
+    const loginStatus = checkLoginStatus(profile.profilePath)
+    if (!loginStatus.loggedIn) {
+      return { success: false, error: '请先登录店铺' }
+    }
+
+    const { chromium } = require('playwright')
+    const { DEFAULT_PLATFORM_MAPPINGS, getElementById } = require('./ecommerce-elements')
+
+    const mapping = DEFAULT_PLATFORM_MAPPINGS[platform] || { mappings: {} }
+    const browser = await chromium.launch({ headless: true })
+    const context = await browser.newContext({
+      userDataDir: profile.profilePath,
+      viewport: { width: 1280, height: 720 },
+    })
+    const page = await context.newPage()
+
+    const targetUrl = pageUrl || getDefaultProductListUrl(platform)
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 })
+    await page.waitForTimeout(2000)
+
+    const results: Record<string, any> = {}
+
+    for (const elementId of elementIds) {
+      const mappingEntry = mapping.mappings[elementId]
+      if (!mappingEntry || !mappingEntry.enabled) continue
+
+      const elementDef = getElementById(elementId)
+      if (!elementDef) continue
+
+      const selectors = [mappingEntry.selector, ...elementDef.commonSelectors].filter(Boolean)
+
+      for (const selector of selectors) {
+        try {
+          const count = await page.locator(selector).count()
+          if (count > 0) {
+            let value: any = null
+
+            if (elementDef.extractAs === 'data-id') {
+              const attrs = mappingEntry.customAttributes || elementDef.attributes || ['data-id']
+              for (const attr of attrs) {
+                const attrValue = await page.locator(selector).first().getAttribute(attr)
+                if (attrValue) {
+                  value = attrValue
+                  break
+                }
+              }
+            } else if (elementDef.extractAs === 'href') {
+              value = await page.locator(selector).first().getAttribute('href')
+            } else if (elementDef.extractAs === 'src') {
+              value = await page.locator(selector).first().getAttribute('src')
+            } else if (elementDef.extractAs === 'value') {
+              value = await page.locator(selector).first().inputValue().catch(() => null)
+            } else if (elementDef.extractAs === 'innerHTML') {
+              value = await page.locator(selector).first().innerHTML().catch(() => null)
+            } else {
+              value = await page.locator(selector).first().textContent()
+            }
+
+            results[elementId] = {
+              value,
+              selector,
+              count,
+              found: true,
+            }
+            break
+          }
+        } catch {
+          continue
+        }
+      }
+
+      if (!results[elementId]) {
+        results[elementId] = { found: false, value: null }
+      }
+    }
+
+    await browser.close()
+    return { success: true, results }
+  })
+
   console.log('[EcommerceData] IPC 处理器已注册')
+}
+
+function getDefaultProductListUrl(platform: string): string {
+  const urls: Record<string, string> = {
+    pinduoduo: 'https://mms.pinduoduo.com/goods/list',
+    douyin: 'https://creator.douyin.com/product/list',
+    taobao: 'https://upload.taobao.com/商品编辑',
+    jd: 'https://seller.jd.com/商品管理',
+    kuaishou: 'https://cp.kwaixiandian.com/goods/list',
+  }
+  return urls[platform] || 'https://www.baidu.com'
 }
 
 // 注册数据处理器
