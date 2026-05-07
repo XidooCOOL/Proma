@@ -218,7 +218,7 @@ import { getDingTalkConfig, saveDingTalkConfig, getDecryptedClientSecret, getDin
 import { dingtalkBridgeManager } from './lib/dingtalk-bridge-manager'
 import { getWeChatConfig } from './lib/wechat-config'
 import { wechatBridge } from './lib/wechat-bridge'
-import { registerEcommerceHandlers, registerSelectorHandlers, registerStoreHandlers } from './lib/ecommerce-handler'
+import { registerEcommerceHandlers, registerSelectorHandlers, registerStoreHandlers, registerProductParserHandlers } from './lib/ecommerce-handler'
 import { registerEcommerceStatusHandlers } from './lib/ecommerce-status-monitor'
 
 /** 文件浏览器中需要隐藏的系统文件 */
@@ -2567,6 +2567,9 @@ export function registerIpcHandlers(): void {
 
   // 注册电商状态监控处理器
   registerEcommerceStatusHandlers()
+
+  // 注册商品解析 IPC 处理器
+  registerProductParserHandlers()
 
   // 注册更新 IPC 处理器
   registerUpdaterIpc()

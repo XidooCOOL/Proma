@@ -952,5 +952,102 @@ export function registerStoreHandlers() {
   console.log('[Store] IPC 处理器已注册')
 }
 
+// ===== 商品解析处理器 =====
+
+/**
+ * 注册商品解析 IPC 处理器
+ */
+function registerProductParserHandlers(): void {
+  // 解析商品链接
+  ipcMain.handle('product:parse-url', async (_, url: string) => {
+    try {
+      // 模拟解析
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      // 实际应该调用后端服务
+      // const result = await parseProductFromUrl(url)
+      
+      // 模拟返回
+      const mockProducts: Record<string, any> = {
+        'taobao': {
+          title: '淘宝商品示例',
+          price: 99.00,
+          description: '这是一款来自淘宝的优质商品',
+          images: ['https://img.alicdn.com/bao/uploaded/xxx.jpg'],
+        },
+        'pinduoduo': {
+          title: '拼多多商品示例',
+          price: 59.00,
+          description: '这是一款来自拼多多的优质商品',
+          images: [],
+        },
+      }
+      
+      let platform = 'unknown'
+      if (url.includes('taobao') || url.includes('tmall')) platform = 'taobao'
+      else if (url.includes('pinduoduo')) platform = 'pinduoduo'
+      else if (url.includes('douyin')) platform = 'douyin'
+      else if (url.includes('jd')) platform = 'jd'
+      
+      return {
+        success: true,
+        product: mockProducts[platform] || {
+          title: '商品',
+          price: 0,
+          description: '',
+          images: [],
+        },
+      }
+    } catch (error) {
+      console.error('[ProductParser] 解析失败:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '解析失败',
+      }
+    }
+  })
+
+  // 从 Excel 导入商品
+  ipcMain.handle('product:import-excel', async (_, filePath: string) => {
+    try {
+      // 实际应该调用后端服务
+      // const products = await parseProductsFromExcel(filePath)
+      
+      // 模拟返回
+      const mockProducts = [
+        {
+          id: `product-${Date.now()}-1`,
+          title: 'Excel商品1',
+          price: 99.00,
+          description: '从Excel导入的商品',
+          images: [],
+          source: 'excel',
+        },
+        {
+          id: `product-${Date.now()}-2`,
+          title: 'Excel商品2',
+          price: 79.00,
+          description: '从Excel导入的商品',
+          images: [],
+          source: 'excel',
+        },
+      ]
+      
+      return {
+        success: true,
+        products: mockProducts,
+      }
+    } catch (error) {
+      console.error('[ProductParser] Excel导入失败:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '导入失败',
+      }
+    }
+  })
+
+  console.log('[ProductParser] IPC 处理器已注册')
+}
+
 console.log('[Selector] IPC 处理器已注册')
 }

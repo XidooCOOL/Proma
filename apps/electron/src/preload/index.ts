@@ -953,6 +953,14 @@ export interface ElectronAPI {
 
   /** 监听 MCP 状态 */
   onEcommerceMcpStatus: (callback: (event: any) => void) => () => void
+
+  // ===== 商品数据解析 =====
+
+  /** 解析商品链接 */
+  parseProductFromUrl: (url: string) => Promise<{ success: boolean; product?: any; error?: string }>
+
+  /** 从 Excel 导入商品 */
+  importProductsFromExcel: (filePath: string) => Promise<{ success: boolean; products?: any[]; error?: string }>
 }
 
 /**
@@ -2133,6 +2141,16 @@ const electronAPI: ElectronAPI = {
     const listener = (_: any, event: any) => callback(event)
     ipcRenderer.on('ecommerce:mcp-status', listener)
     return () => ipcRenderer.removeListener('ecommerce:mcp-status', listener)
+  },
+
+  // ===== 商品数据解析 =====
+
+  parseProductFromUrl: (url: string) => {
+    return ipcRenderer.invoke('product:parse-url', url)
+  },
+
+  importProductsFromExcel: (filePath: string) => {
+    return ipcRenderer.invoke('product:import-excel', filePath)
   },
 }
 
