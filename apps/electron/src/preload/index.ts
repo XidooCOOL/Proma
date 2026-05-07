@@ -975,6 +975,74 @@ export interface ElectronAPI {
 
   /** 扫描商品文件夹 */
   scanProductFolders: (rootPath: string) => Promise<{ success: boolean; products?: any[]; totalFolders?: number; error?: string }>
+
+  // ===== 电商数据持久化 =====
+
+  /** 获取所有店铺 Profile */
+  getEcommerceProfiles: () => Promise<any[]>
+
+  /** 获取单个 Profile */
+  getEcommerceProfile: (id: string) => Promise<any | undefined>
+
+  /** 按平台获取 Profile */
+  getEcommerceProfilesByPlatform: (platform: string) => Promise<any[]>
+
+  /** 创建 Profile */
+  createEcommerceProfile: (data: { name: string; platform: string }) => Promise<any>
+
+  /** 更新 Profile */
+  updateEcommerceProfile: (id: string, updates: any) => Promise<any | undefined>
+
+  /** 删除 Profile */
+  deleteEcommerceProfile: (id: string) => Promise<boolean>
+
+  /** 更新 Profile 统计 */
+  updateEcommerceProfileStats: (id: string, stats: any) => Promise<{ success: boolean }>
+
+  /** 获取 Selector 平台列表 */
+  getEcommerceSelectorPlatforms: () => Promise<string[]>
+
+  /** 获取 Selector 页面列表 */
+  getEcommerceSelectorPages: (platform: string) => Promise<string[]>
+
+  /** 获取单个 Selector 配置 */
+  getEcommerceSelectorConfig: (platform: string, page: string) => Promise<any | undefined>
+
+  /** 获取平台所有 Selector */
+  getEcommerceAllSelectors: (platform: string) => Promise<any[]>
+
+  /** 保存 Selector 配置 */
+  saveEcommerceSelectorConfig: (config: any) => Promise<{ success: boolean }>
+
+  /** 删除 Selector 配置 */
+  deleteEcommerceSelectorConfig: (platform: string, page: string) => Promise<boolean>
+
+  /** 添加上架记录 */
+  addListingRecord: (record: any) => Promise<any>
+
+  /** 更新上架记录 */
+  updateListingRecord: (id: string, updates: any) => Promise<any | undefined>
+
+  /** 按 Profile 获取记录 */
+  getRecordsByProfile: (profileId: string, year?: number, month?: number) => Promise<any[]>
+
+  /** 获取最近记录 */
+  getRecentListingRecords: (limit?: number) => Promise<any[]>
+
+  /** 添加任务日志 */
+  addTaskLog: (log: any) => Promise<any>
+
+  /** 更新任务日志 */
+  updateTaskLog: (id: string, updates: any) => Promise<any | undefined>
+
+  /** 获取运行中的任务 */
+  getRunningTasks: () => Promise<any[]>
+
+  /** 获取最近任务日志 */
+  getRecentTaskLogs: (limit?: number) => Promise<any[]>
+
+  /** 按 Profile 获取任务日志 */
+  getTaskLogsByProfile: (profileId: string, limit?: number) => Promise<any[]>
 }
 
 /**
@@ -2183,6 +2251,96 @@ const electronAPI: ElectronAPI = {
 
   scanProductFolders: (rootPath: string) => {
     return ipcRenderer.invoke('file:scan-product-folders', rootPath)
+  },
+
+  // ===== 电商数据持久化 =====
+
+  getEcommerceProfiles: () => {
+    return ipcRenderer.invoke('ecommerce:get-profiles')
+  },
+
+  getEcommerceProfile: (id: string) => {
+    return ipcRenderer.invoke('ecommerce:get-profile', id)
+  },
+
+  getEcommerceProfilesByPlatform: (platform: string) => {
+    return ipcRenderer.invoke('ecommerce:get-profiles-by-platform', platform)
+  },
+
+  createEcommerceProfile: (data: { name: string; platform: string }) => {
+    return ipcRenderer.invoke('ecommerce:create-profile', data)
+  },
+
+  updateEcommerceProfile: (id: string, updates: any) => {
+    return ipcRenderer.invoke('ecommerce:update-profile', id, updates)
+  },
+
+  deleteEcommerceProfile: (id: string) => {
+    return ipcRenderer.invoke('ecommerce:delete-profile', id)
+  },
+
+  updateEcommerceProfileStats: (id: string, stats: any) => {
+    return ipcRenderer.invoke('ecommerce:update-profile-stats', id, stats)
+  },
+
+  getEcommerceSelectorPlatforms: () => {
+    return ipcRenderer.invoke('ecommerce:get-selector-platforms')
+  },
+
+  getEcommerceSelectorPages: (platform: string) => {
+    return ipcRenderer.invoke('ecommerce:get-selector-pages', platform)
+  },
+
+  getEcommerceSelectorConfig: (platform: string, page: string) => {
+    return ipcRenderer.invoke('ecommerce:get-selector-config', platform, page)
+  },
+
+  getEcommerceAllSelectors: (platform: string) => {
+    return ipcRenderer.invoke('ecommerce:get-all-selectors', platform)
+  },
+
+  saveEcommerceSelectorConfig: (config: any) => {
+    return ipcRenderer.invoke('ecommerce:save-selector-config', config)
+  },
+
+  deleteEcommerceSelectorConfig: (platform: string, page: string) => {
+    return ipcRenderer.invoke('ecommerce:delete-selector-config', platform, page)
+  },
+
+  addListingRecord: (record: any) => {
+    return ipcRenderer.invoke('ecommerce:add-listing-record', record)
+  },
+
+  updateListingRecord: (id: string, updates: any) => {
+    return ipcRenderer.invoke('ecommerce:update-listing-record', id, updates)
+  },
+
+  getRecordsByProfile: (profileId: string, year?: number, month?: number) => {
+    return ipcRenderer.invoke('ecommerce:get-records-by-profile', profileId, year, month)
+  },
+
+  getRecentListingRecords: (limit?: number) => {
+    return ipcRenderer.invoke('ecommerce:get-recent-records', limit)
+  },
+
+  addTaskLog: (log: any) => {
+    return ipcRenderer.invoke('ecommerce:add-task-log', log)
+  },
+
+  updateTaskLog: (id: string, updates: any) => {
+    return ipcRenderer.invoke('ecommerce:update-task-log', id, updates)
+  },
+
+  getRunningTasks: () => {
+    return ipcRenderer.invoke('ecommerce:get-running-tasks')
+  },
+
+  getRecentTaskLogs: (limit?: number) => {
+    return ipcRenderer.invoke('ecommerce:get-recent-task-logs', limit)
+  },
+
+  getTaskLogsByProfile: (profileId: string, limit?: number) => {
+    return ipcRenderer.invoke('ecommerce:get-task-logs-by-profile', profileId, limit)
   },
 }
 

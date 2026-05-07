@@ -1339,4 +1339,124 @@ function registerProductScannerHandlers(): void {
 // 注册商品扫描处理器
 registerProductScannerHandlers()
 
+// ===== 数据持久化服务 IPC 处理器 =====
+
+import {
+  initEcommerceDataService,
+  getStoreProfileService,
+  getSelectorConfigService,
+  getListingRecordService,
+  getTaskLogService,
+  StoreProfile,
+  SelectorConfig,
+  ListingRecord,
+  TaskLog,
+} from './ecommerce-data-service'
+
+/**
+ * 注册数据持久化 IPC 处理器
+ */
+export function registerEcommerceDataHandlers(): void {
+  initEcommerceDataService()
+
+  // Store Profile CRUD
+  ipcMain.handle('ecommerce:get-profiles', async () => {
+    return getStoreProfileService().getAll()
+  })
+
+  ipcMain.handle('ecommerce:get-profile', async (_, id: string) => {
+    return getStoreProfileService().getById(id)
+  })
+
+  ipcMain.handle('ecommerce:get-profiles-by-platform', async (_, platform: string) => {
+    return getStoreProfileService().getByPlatform(platform)
+  })
+
+  ipcMain.handle('ecommerce:create-profile', async (_, data: { name: string; platform: string }) => {
+    return getStoreProfileService().create(data)
+  })
+
+  ipcMain.handle('ecommerce:update-profile', async (_, id: string, updates: Partial<StoreProfile>) => {
+    return getStoreProfileService().update(id, updates)
+  })
+
+  ipcMain.handle('ecommerce:delete-profile', async (_, id: string) => {
+    return getStoreProfileService().delete(id)
+  })
+
+  ipcMain.handle('ecommerce:update-profile-stats', async (_, id: string, stats: Partial<StoreProfile['stats']>) => {
+    getStoreProfileService().updateStats(id, stats)
+    return { success: true }
+  })
+
+  // Selector Config
+  ipcMain.handle('ecommerce:get-selector-platforms', async () => {
+    return getSelectorConfigService().getPlatforms()
+  })
+
+  ipcMain.handle('ecommerce:get-selector-pages', async (_, platform: string) => {
+    return getSelectorConfigService().getPages(platform)
+  })
+
+  ipcMain.handle('ecommerce:get-selector-config', async (_, platform: string, page: string) => {
+    return getSelectorConfigService().get(platform, page)
+  })
+
+  ipcMain.handle('ecommerce:get-all-selectors', async (_, platform: string) => {
+    return getSelectorConfigService().getAll(platform)
+  })
+
+  ipcMain.handle('ecommerce:save-selector-config', async (_, config: SelectorConfig) => {
+    getSelectorConfigService().save(config)
+    return { success: true }
+  })
+
+  ipcMain.handle('ecommerce:delete-selector-config', async (_, platform: string, page: string) => {
+    return getSelectorConfigService().delete(platform, page)
+  })
+
+  // Listing Records
+  ipcMain.handle('ecommerce:add-listing-record', async (_, record: Omit<ListingRecord, 'id'>) => {
+    return getListingRecordService().add(record)
+  })
+
+  ipcMain.handle('ecommerce:update-listing-record', async (_, id: string, updates: Partial<ListingRecord>) => {
+    return getListingRecordService().update(id, updates)
+  })
+
+  ipcMain.handle('ecommerce:get-records-by-profile', async (_, profileId: string, year?: number, month?: number) => {
+    return getListingRecordService().getByProfile(profileId, year, month)
+  })
+
+  ipcMain.handle('ecommerce:get-recent-records', async (_, limit?: number) => {
+    return getListingRecordService().getRecent(limit)
+  })
+
+  // Task Logs
+  ipcMain.handle('ecommerce:add-task-log', async (_, log: Omit<TaskLog, 'id'>) => {
+    return getTaskLogService().add(log)
+  })
+
+  ipcMain.handle('ecommerce:update-task-log', async (_, id: string, updates: Partial<TaskLog>) => {
+    return getTaskLogService().update(id, updates)
+  })
+
+  ipcMain.handle('ecommerce:get-running-tasks', async () => {
+    return getTaskLogService().getRunning()
+  })
+
+  ipcMain.handle('ecommerce:get-recent-task-logs', async (_, limit?: number) => {
+    return getTaskLogService().getRecent(limit)
+  })
+
+  ipcMain.handle('ecommerce:get-task-logs-by-profile', async (_, profileId: string, limit?: number) => {
+    return getTaskLogService().getByProfile(profileId, limit)
+  })
+
+  console.log('[EcommerceData] IPC 处理器已注册')
+}
+
+// 注册数据处理器
+registerEcommerceDataHandlers()
+
 console.log('[Selector] IPC 处理器已注册')
