@@ -177,6 +177,43 @@ class EcommerceMCPServer {
             }
           },
 
+          // ===== 获取可用工作流 =====
+          {
+            name: 'get_workflows',
+            description: '获取指定平台可用的自动化工作流列表',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                platform: {
+                  type: 'string',
+                  enum: ['pinduoduo', 'douyin', 'taobao', 'jd', 'kuaishou', 'all'],
+                  description: '平台名称，all 表示获取所有平台'
+                }
+              }
+            }
+          },
+
+          // ===== 获取工作流详情 =====
+          {
+            name: 'get_workflow_detail',
+            description: '获取指定工作流的详细步骤信息',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                platform: {
+                  type: 'string',
+                  enum: ['pinduoduo', 'douyin', 'taobao', 'jd', 'kuaishou'],
+                  description: '平台名称'
+                },
+                workflow_name: {
+                  type: 'string',
+                  description: '工作流名称，如 product-listing, order-management'
+                }
+              },
+              required: ['platform', 'workflow_name']
+            }
+          },
+
           // ===== 订单管理 =====
           {
             name: 'manage_orders',
@@ -296,6 +333,12 @@ class EcommerceMCPServer {
 
           case 'get_task_status':
             return await this.handleGetTaskStatus(args)
+
+          case 'get_workflows':
+            return await this.handleGetWorkflows(args)
+
+          case 'get_workflow_detail':
+            return await this.handleGetWorkflowDetail(args)
 
           case 'get_collection_results':
             return await this.handleGetCollectionResults(args)
@@ -514,6 +557,111 @@ class EcommerceMCPServer {
           collection_id,
           items: [],
           message: '采集结果已返回'
+        })
+      }]
+    }
+  }
+
+  private async handleGetWorkflows(args: any) {
+    const { platform } = args
+    console.error(`[MCP] 获取工作流列表: ${platform}`)
+
+    const workflows = [
+      {
+        platform: 'pinduoduo',
+        workflows: [
+          { id: 'pinduoduo-product-listing', name: '上架商品', description: '发布新商品到拼多多' },
+          { id: 'pinduoduo-product-update', name: '编辑商品', description: '修改已有商品信息' },
+          { id: 'pinduoduo-order-ship', name: '批量发货', description: '批量处理订单发货' },
+        ]
+      },
+      {
+        platform: 'douyin',
+        workflows: [
+          { id: 'douyin-product-listing', name: '上架商品', description: '发布新商品到抖音电商' },
+          { id: 'douyin-product-update', name: '编辑商品', description: '修改已有商品信息' },
+          { id: 'douyin-order-ship', name: '批量发货', description: '批量处理订单发货' },
+        ]
+      },
+      {
+        platform: 'taobao',
+        workflows: [
+          { id: 'taobao-product-listing', name: '上架商品', description: '发布新商品到淘宝' },
+          { id: 'taobao-order-ship', name: '批量发货', description: '批量处理订单发货' },
+        ]
+      },
+    ]
+
+    let result = workflows
+    if (platform && platform !== 'all') {
+      result = workflows.filter(w => w.platform === platform)
+    }
+
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          success: true,
+          workflows: result,
+          message: `共 ${result.reduce((sum, p) => sum + p.workflows.length, 0)} 个工作流`
+        })
+      }]
+    }
+  }
+
+  private async handleGetWorkflowDetail(args: any) {
+    const { platform, workflow_name } = args
+    console.error(`[MCP] 获取工作流详情: ${platform}/${workflow_name}`)
+
+    const workflowDetails: Record<string, any> = {
+      'pinduoduo-product-listing': {
+        id: 'pinduoduo-product-listing',
+        name: '上架商品',
+        platform: 'pinduoduo',
+        version: '1.0.0',
+        steps: [
+          { step: 1, name: '打开后台', action: 'goto' },
+          { step: 2, name: '等待页面加载', action: 'waitForSelector' },
+          { step: 3, name: '填写标题', action: 'fill', field: 'productTitle' },
+          { step: 4, name: '选择类目', action: 'click' },
+          { step: 5, name: '填写价格', action: 'fill', field: 'price' },
+          { step: 6, name: '填写库存', action: 'fill', field: 'stock' },
+          { step: 7, name: '上传主图', action: 'upload', field: 'mainImage' },
+          { step: 8, name: '上传详情图', action: 'upload', field: 'detailImages' },
+          { step: 9, name: '选择运费模板', action: 'select' },
+          { step: 10, name: '提交审核', action: 'click', field: 'submit' },
+        ],
+        inputFields: ['title', 'price', 'stock', 'description', 'images', 'detailImages', 'category'],
+      },
+      'douyin-product-listing': {
+        id: 'douyin-product-listing',
+        name: '上架商品',
+        platform: 'douyin',
+        version: '1.0.0',
+        steps: [
+          { step: 1, name: '打开后台', action: 'goto' },
+          { step: 2, name: '填写标题', action: 'fill' },
+          { step: 3, name: '选择类目', action: 'click' },
+          { step: 4, name: '填写价格', action: 'fill' },
+          { step: 5, name: '填写库存', action: 'fill' },
+          { step: 6, name: '上传封面图', action: 'upload' },
+          { step: 7, name: '上传图片', action: 'upload' },
+          { step: 8, name: '上传视频', action: 'upload' },
+          { step: 9, name: '提交审核', action: 'click' },
+        ],
+        inputFields: ['title', 'price', 'stock', 'coverImage', 'images', 'video'],
+      },
+    }
+
+    const key = `${platform}-${workflow_name}`
+    const detail = workflowDetails[key]
+
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          success: true,
+          workflow: detail || { message: '工作流详情未找到' },
         })
       }]
     }
