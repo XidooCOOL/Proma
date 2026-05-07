@@ -14,27 +14,8 @@ export const douyinProductListingWorkflow: WorkflowDefinition = {
   inputSchema: {
     type: 'object',
     properties: {
-      product: {
-        type: 'object',
-        description: '商品信息',
-        required: true,
-        properties: {
-          title: { type: 'string', description: '商品标题' },
-          price: { type: 'number', description: '商品价格' },
-          description: { type: 'string', description: '商品描述' },
-          coverImage: { type: 'string', description: '封面图路径' },
-          images: { type: 'array', description: '商品图片', items: { type: 'string' } },
-          video: { type: 'string', description: '商品视频路径' },
-          stock: { type: 'number', description: '库存数量' },
-          category: { type: 'string', description: '商品类目' },
-        },
-      },
-      options: {
-        type: 'object',
-        properties: {
-          saveDraft: { type: 'boolean', description: '是否保存草稿', defaultValue: false },
-        },
-      },
+      product: { type: 'object', description: '商品信息', required: true },
+      options: { type: 'object', description: '选项配置' },
     },
   },
   

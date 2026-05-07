@@ -17,7 +17,8 @@ import {
   WorkerStatus,
   WorkerType,
   Platform,
-} from '../types'
+  TaskResult,
+} from './types'
 import { OperationWorker } from './workers/operation-worker'
 import { CollectionWorker } from './workers/collection-worker'
 
@@ -61,6 +62,7 @@ export class WorkerPool extends EventEmitter {
     for (let i = 0; i < this.config.maxOperationWorkers; i++) {
       const worker = new OperationWorker({
         id: `operation-worker-${i}`,
+        type: 'operation',
         maxConcurrentTasks: 1,
         timeout: this.config.defaultTimeout,
         retryEnabled: this.config.enableRetry,
@@ -75,6 +77,7 @@ export class WorkerPool extends EventEmitter {
     for (let i = 0; i < this.config.maxCollectionWorkers; i++) {
       const worker = new CollectionWorker({
         id: `collection-worker-${i}`,
+        type: 'collection',
         maxConcurrentTasks: 1,
         timeout: this.config.defaultTimeout,
         retryEnabled: this.config.enableRetry,
@@ -330,13 +333,17 @@ export class WorkerPool extends EventEmitter {
 
     for (const product of input.products) {
       try {
-        const task = {
+        const task: Task = {
           id: uuidv4(),
-          type: 'operation' as const,
+          type: 'operation',
           action: 'product-listing',
+          subtype: 'product-listing',
           target: { platform: input.platform as Platform, profileId: input.profile_id },
-          data: { product },
-          status: 'pending' as const,
+          params: { product },
+          status: 'pending',
+          progress: 0,
+          retryCount: 0,
+          maxRetries: 3,
           createdAt: Date.now()
         }
 
@@ -365,7 +372,7 @@ export class WorkerPool extends EventEmitter {
     count: number
     content_type?: string
   }): Promise<{ id: string; collected: number; items: any[] }> {
-    console.log(`[WorkerPool] 采集内容 from ${input.source}: ${input.keywords.join(', ')}`)
+    console.log(`[WorkerPool] 采集内容 from ${input.source}: ${(input.keywords || []).join(', ')}`)
 
     const collectionId = uuidv4()
     const worker = this.getAvailableCollectionWorker()
@@ -377,18 +384,22 @@ export class WorkerPool extends EventEmitter {
 
     for (const keyword of input.keywords) {
       try {
-        const task = {
+        const task: Task = {
           id: uuidv4(),
-          type: 'collection' as const,
+          type: 'collection',
           action: 'content-collection',
+          subtype: 'content-collection',
           target: { source: input.source, keyword },
-          data: { count: input.count, contentType: input.content_type },
-          status: 'pending' as const,
+          params: { count: input.count, contentType: input.content_type },
+          status: 'pending',
+          progress: 0,
+          retryCount: 0,
+          maxRetries: 3,
           createdAt: Date.now()
         }
 
         const result = await worker.execute(task)
-        items.push(...(result.items || []))
+        items.push(...((result as TaskResult)?.data?.items || []))
       } catch (error) {
         console.error(`[WorkerPool] 采集 ${keyword} 失败:`, error)
       }
@@ -417,13 +428,17 @@ export class WorkerPool extends EventEmitter {
 
     for (const item of input.items) {
       try {
-        const task = {
+        const task: Task = {
           id: uuidv4(),
-          type: 'operation' as const,
+          type: 'operation',
           action: 'inventory-update',
+          subtype: 'inventory-update',
           target: { platform: input.platform as Platform, profileId: input.profile_id },
-          data: { productId: item.product_id, stock: item.stock, price: item.price },
-          status: 'pending' as const,
+          params: { productId: item.product_id, stock: item.stock, price: item.price },
+          status: 'pending',
+          progress: 0,
+          retryCount: 0,
+          maxRetries: 3,
           createdAt: Date.now()
         }
 
@@ -448,18 +463,22 @@ export class WorkerPool extends EventEmitter {
       throw new Error('没有可用的运营 Worker')
     }
 
-    const task = {
+    const task: Task = {
       id: uuidv4(),
-      type: 'operation' as const,
+      type: 'operation',
       action: 'order-management',
+      subtype: 'order-management',
       target: { platform: platform as Platform },
-      data: { action: 'list' },
-      status: 'pending' as const,
+      params: { action: 'list' },
+      status: 'pending',
+      progress: 0,
+      retryCount: 0,
+      maxRetries: 3,
       createdAt: Date.now()
     }
 
     const result = await worker.execute(task)
-    return { orders: result.orders || [], total: result.total || 0 }
+    return { orders: (result as TaskResult)?.data?.orders || [], total: (result as TaskResult)?.data?.total || 0 }
   }
 
   /**
@@ -478,13 +497,17 @@ export class WorkerPool extends EventEmitter {
 
     for (const orderId of orderIds) {
       try {
-        const task = {
+        const task: Task = {
           id: uuidv4(),
-          type: 'operation' as const,
+          type: 'operation',
           action: 'order-management',
+          subtype: 'order-management',
           target: { platform: platform as Platform },
-          data: { action: 'ship', orderId },
-          status: 'pending' as const,
+          params: { action: 'ship', orderId },
+          status: 'pending',
+          progress: 0,
+          retryCount: 0,
+          maxRetries: 3,
           createdAt: Date.now()
         }
 
@@ -514,13 +537,17 @@ export class WorkerPool extends EventEmitter {
 
     for (const orderId of orderIds) {
       try {
-        const task = {
+        const task: Task = {
           id: uuidv4(),
-          type: 'operation' as const,
+          type: 'operation',
           action: 'order-management',
+          subtype: 'order-management',
           target: { platform: platform as Platform },
-          data: { action: 'refund', orderId },
-          status: 'pending' as const,
+          params: { action: 'refund', orderId },
+          status: 'pending',
+          progress: 0,
+          retryCount: 0,
+          maxRetries: 3,
           createdAt: Date.now()
         }
 

@@ -13,20 +13,22 @@ export type CollectionType = 'content-collection' | 'price-monitoring' | 'compet
 export type Platform = 'pinduoduo' | 'douyin' | 'taobao' | 'jd' | 'xiaohongshu'
 
 export interface Product {
-  id: string
+  id?: string
   title: string
   price: number
-  stock: number
-  images: string[]
+  stock?: number
+  images?: string[]
   description?: string
   category?: string
   specifications?: Record<string, string>
 }
 
 export interface TaskTarget {
-  platform: Platform
+  platform?: Platform
   store?: string
   profileId?: string
+  source?: string
+  keyword?: string
 }
 
 export interface TaskParams {
@@ -285,9 +287,6 @@ export interface PlatformConfig {
 export function createTask(partial: Partial<Task> & { type: TaskType; action: string; target: TaskTarget }): Task {
   return {
     id: partial.id || `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    type: partial.type,
-    action: partial.action,
-    target: partial.target,
     params: partial.params || {},
     status: partial.status || 'pending',
     progress: partial.progress || 0,

@@ -16,7 +16,7 @@ import {
   WorkerConfig,
   WorkerStatus,
   Platform,
-} from '../../types'
+} from '../types'
 import { BrowserPool } from '../browser-pool'
 import { 
   EcommerceWorkflowEngine, 
@@ -28,8 +28,8 @@ export class OperationWorker extends EventEmitter {
   readonly id: string
   readonly type: 'operation' = 'operation'
   readonly config: WorkerConfig
-  private status: WorkerStatus = 'idle'
-  private currentTask?: Task
+  private _status: WorkerStatus = 'idle'
+  private _currentTask?: Task
   private browserPool: BrowserPool
 
   constructor(config: WorkerConfig) {
@@ -44,14 +44,22 @@ export class OperationWorker extends EventEmitter {
   }
 
   get workerStatus(): WorkerStatus {
-    return this.status
+    return this._status
+  }
+
+  get status(): WorkerStatus {
+    return this._status
+  }
+
+  get currentTask(): Task | undefined {
+    return this._currentTask
   }
 
   async execute(task: Task): Promise<TaskResult> {
     console.log(`[OperationWorker:${this.id}] 开始执行任务: ${task.id}`)
 
-    this.status = 'busy'
-    this.currentTask = task
+    this._status = 'busy'
+    this._currentTask = task
 
     try {
       let result: TaskResult
@@ -76,8 +84,8 @@ export class OperationWorker extends EventEmitter {
       console.error(`[OperationWorker:${this.id}] 任务失败: ${task.id}`, error)
       throw error
     } finally {
-      this.status = 'idle'
-      this.currentTask = undefined
+      this._status = 'idle'
+      this._currentTask = undefined
     }
   }
 
@@ -85,15 +93,16 @@ export class OperationWorker extends EventEmitter {
    * 使用工作流执行商品上架
    */
   private async executeProductListing(task: Task): Promise<TaskResult> {
-    const { platform, profileId } = task.target
-    const product = task.data?.product
+    const platform = task.target.platform || 'pinduoduo'
+    const profileId = task.target.profileId
+    const product = task.params?.product
 
     console.log(`[OperationWorker:${this.id}] 商品上架: ${product?.title} -> ${platform}`)
 
     const startTime = Date.now()
 
     try {
-      const browser = await this.browserPool.acquire(profileId)
+      const browserInstance = await this.browserPool.acquire(profileId || 'default', platform)
 
       const workflow = getWorkflow(platform, 'product-listing')
       if (!workflow) {
@@ -101,7 +110,7 @@ export class OperationWorker extends EventEmitter {
       }
 
       const engine = createWorkflowEngine({
-        browser: browser.browser,
+        browser: browserInstance.browser,
         contextId: profileId || 'default',
         defaultTimeout: 30000,
         defaultRetries: 3,
@@ -110,7 +119,7 @@ export class OperationWorker extends EventEmitter {
 
       const execution = await engine.execute(workflow, {
         product,
-        options: task.data?.options || {},
+        options: task.params?.options || {},
       })
 
       if (execution.status === 'failed') {
@@ -143,15 +152,16 @@ export class OperationWorker extends EventEmitter {
    * 执行订单管理
    */
   private async executeOrderManagement(task: Task): Promise<TaskResult> {
-    const { platform, profileId } = task.target
-    const { action, orderId } = task.data || {}
+    const platform = task.target.platform || 'pinduoduo'
+    const profileId = task.target.profileId
+    const { action, orderId } = task.params || {}
 
     console.log(`[OperationWorker:${this.id}] 订单管理: ${platform} - ${action}`)
 
     const startTime = Date.now()
 
     try {
-      const browser = await this.browserPool.acquire(profileId)
+      const browserInstance = await this.browserPool.acquire(profileId || 'default', platform)
 
       const workflow = getWorkflow(platform, 'order-management')
       if (!workflow) {
@@ -159,9 +169,10 @@ export class OperationWorker extends EventEmitter {
       }
 
       const engine = createWorkflowEngine({
-        browser: browser.browser,
+        browser: browserInstance.browser,
         contextId: profileId || 'default',
         defaultTimeout: 30000,
+        defaultRetries: 3,
       })
 
       const execution = await engine.execute(workflow, {
@@ -194,15 +205,16 @@ export class OperationWorker extends EventEmitter {
    * 执行库存更新
    */
   private async executeInventoryUpdate(task: Task): Promise<TaskResult> {
-    const { platform, profileId } = task.target
-    const { productId, stock, price } = task.data || {}
+    const platform = task.target.platform || 'pinduoduo'
+    const profileId = task.target.profileId
+    const { productId, stock, price } = task.params || {}
 
     console.log(`[OperationWorker:${this.id}] 库存更新: ${platform} - ${productId}`)
 
     const startTime = Date.now()
 
     try {
-      const browser = await this.browserPool.acquire(profileId)
+      const browserInstance = await this.browserPool.acquire(profileId || 'default', platform)
 
       const duration = Date.now() - startTime
 
@@ -229,15 +241,15 @@ export class OperationWorker extends EventEmitter {
    * 暂停
    */
   pause(): void {
-    this.status = 'idle'
+    this._status = 'idle'
   }
 
   /**
    * 恢复
    */
   resume(): void {
-    if (this.status === 'idle') {
-      this.status = 'idle'
+    if (this._status === 'idle') {
+      this._status = 'idle'
     }
   }
 

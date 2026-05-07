@@ -131,7 +131,7 @@ export interface WorkflowDefinition {
   /** 输入数据类型 */
   inputSchema?: {
     type: 'object'
-    properties: Record<string, {
+    properties?: Record<string, {
       type: string
       description?: string
       required?: boolean

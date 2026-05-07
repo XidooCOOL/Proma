@@ -12,7 +12,7 @@ import {
   Platform,
   OperationType,
   CollectionType,
-} from '../types'
+} from './types'
 
 export class IntentParser {
   /**

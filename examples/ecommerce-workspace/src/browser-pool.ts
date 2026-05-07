@@ -5,7 +5,7 @@
  */
 
 import { chromium, Browser, BrowserContext, Page } from 'playwright'
-import { Platform, BrowserInstance } from '../types'
+import { Platform, BrowserInstance } from './types'
 
 export class BrowserPool {
   private browsers: Map<string, BrowserInstance> = new Map()
@@ -76,7 +76,6 @@ export class BrowserPool {
 
       // 创建上下文
       const context = await browser.newContext({
-        userDataDir: profilePath,
         viewport: { width: 1280, height: 720 }
       })
 
@@ -285,6 +284,34 @@ export class BrowserPool {
     }
 
     return instance.page.content()
+  }
+
+  /**
+   * 获取浏览器实例（别名）
+   */
+  async acquire(instanceId: string, platform?: Platform): Promise<BrowserInstance> {
+    return this.acquireBrowser(instanceId, platform || 'pinduoduo')
+  }
+
+  /**
+   * 释放浏览器实例（别名）
+   */
+  async release(instanceId: string): Promise<void> {
+    return this.releaseBrowser(instanceId)
+  }
+
+  /**
+   * 初始化（空实现，兼容接口）
+   */
+  async initialize(): Promise<void> {
+    console.log('[BrowserPool] 初始化完成')
+  }
+
+  /**
+   * 销毁（别名）
+   */
+  async destroy(): Promise<void> {
+    return this.cleanup()
   }
 
   /**

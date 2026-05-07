@@ -25,27 +25,8 @@ export const pinduoduoProductListingWorkflow: WorkflowDefinition = {
   inputSchema: {
     type: 'object',
     properties: {
-      product: {
-        type: 'object',
-        description: '商品信息',
-        required: true,
-        properties: {
-          title: { type: 'string', description: '商品标题' },
-          price: { type: 'number', description: '商品价格' },
-          description: { type: 'string', description: '商品描述' },
-          images: { type: 'array', description: '商品图片路径列表', items: { type: 'string' } },
-          detailImages: { type: 'array', description: '详情图片路径列表', items: { type: 'string' } },
-          stock: { type: 'number', description: '库存数量' },
-          category: { type: 'string', description: '商品类目' },
-        },
-      },
-      options: {
-        type: 'object',
-        properties: {
-          saveDraft: { type: 'boolean', description: '是否保存草稿', defaultValue: false },
-          preview: { type: 'boolean', description: '是否预览后再发布', defaultValue: false },
-        },
-      },
+      product: { type: 'object', description: '商品信息', required: true },
+      options: { type: 'object', description: '选项配置' },
     },
   },
   

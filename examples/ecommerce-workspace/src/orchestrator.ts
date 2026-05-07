@@ -27,7 +27,7 @@ import {
   TaskEvent,
   OverallProgress,
   GroupProgress,
-} from '../types'
+} from './types'
 import { WorkerPool } from './worker-pool'
 import { IntentParser } from './intent-parser'
 
@@ -194,7 +194,7 @@ export class TaskOrchestrator extends EventEmitter {
 
       const groupTasks = allTasks.filter(t => 
         t.type === 'operation' && 
-        operation.targets.includes(t.target.platform)
+        t.target.platform && operation.targets.includes(t.target.platform)
       )
 
       const group = createTaskGroup(
