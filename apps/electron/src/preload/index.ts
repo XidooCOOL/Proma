@@ -853,6 +853,32 @@ export interface ElectronAPI {
 
   /** 订阅电商安装进度事件 */
   onEcommerceProgress: (callback: (progress: { step: string; message: string; progress: number; error?: string }) => void) => () => void
+
+  // ===== Selector 管理 =====
+
+  /** 获取平台的选择器配置 */
+  getPlatformSelectors: (platform: string) => Promise<Record<string, any>>
+
+  /** 更新单个选择器 */
+  updateSelector: (platform: string, page: string, selectorId: string, selector: any) => Promise<void>
+
+  /** 添加新选择器 */
+  addSelector: (platform: string, page: string, selectorId: string, selector: any) => Promise<void>
+
+  /** 删除选择器 */
+  deleteSelector: (platform: string, page: string, selectorId: string) => Promise<void>
+
+  /** 导入选择器配置 */
+  importSelectors: (platform: string, data: any) => Promise<void>
+
+  /** 调试选择器 - 检测页面可用元素 */
+  debugSelectors: (platform: string, page: string, url: string) => Promise<Array<{ selector: string; count: number }>>
+
+  /** 测试选择器 - 验证现有选择器是否有效 */
+  testSelectors: (platform: string, page: string, url: string) => Promise<Record<string, any>>
+
+  /** 批量检测页面改版 - 检查选择器是否失效 */
+  detectBrokenSelectors: (platform: string, pages: string[]) => Promise<string[]>
 }
 
 /**
@@ -1915,6 +1941,40 @@ const electronAPI: ElectronAPI = {
     const listener = (_: unknown, progress: { step: string; message: string; progress: number; error?: string }) => callback(progress)
     ipcRenderer.on('ecommerce:progress', listener)
     return () => { ipcRenderer.removeListener('ecommerce:progress', listener) }
+  },
+
+  // ===== Selector 管理 =====
+
+  getPlatformSelectors: (platform: string) => {
+    return ipcRenderer.invoke('selector:get-platform', platform)
+  },
+
+  updateSelector: (platform: string, page: string, selectorId: string, selector: any) => {
+    return ipcRenderer.invoke('selector:update', platform, page, selectorId, selector)
+  },
+
+  addSelector: (platform: string, page: string, selectorId: string, selector: any) => {
+    return ipcRenderer.invoke('selector:add', platform, page, selectorId, selector)
+  },
+
+  deleteSelector: (platform: string, page: string, selectorId: string) => {
+    return ipcRenderer.invoke('selector:delete', platform, page, selectorId)
+  },
+
+  importSelectors: (platform: string, data: any) => {
+    return ipcRenderer.invoke('selector:import', platform, data)
+  },
+
+  debugSelectors: (platform: string, page: string, url: string) => {
+    return ipcRenderer.invoke('selector:debug', platform, page, url)
+  },
+
+  testSelectors: (platform: string, page: string, url: string) => {
+    return ipcRenderer.invoke('selector:test', platform, page, url)
+  },
+
+  detectBrokenSelectors: (platform: string, pages: string[]) => {
+    return ipcRenderer.invoke('selector:detect-broken', platform, pages)
   },
 }
 

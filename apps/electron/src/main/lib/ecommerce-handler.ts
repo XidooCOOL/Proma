@@ -293,3 +293,346 @@ async function startServer(sendProgress?: ProgressCallback): Promise<void> {
   
   console.log('[Ecommerce] 服务启动完成（需要通过工作区使用）')
 }
+
+// ===== Selector 管理处理器 =====
+
+interface SelectorDef {
+  id: string
+  name: string
+  selector: string
+  type: string
+  description: string
+  required: boolean
+  timeout?: number
+  waitFor?: string
+}
+
+interface PageSelectors {
+  page: string
+  urlPattern?: string
+  elements: Record<string, SelectorDef>
+  version: string
+  updatedAt: string
+}
+
+function getSelectorsDir(): string {
+  return join(WORKSPACE_DIR, 'selectors')
+}
+
+function getPlatformSelectorsPath(platform: string): string {
+  return join(getSelectorsDir(), platform)
+}
+
+/**
+ * 获取平台的选择器配置
+ */
+function getPlatformSelectors(platform: string): Record<string, PageSelectors> {
+  const platformDir = getPlatformSelectorsPath(platform)
+  const result: Record<string, PageSelectors> = {}
+  
+  if (!existsSync(platformDir)) {
+    // 返回默认选择器
+    return getDefaultSelectors(platform)
+  }
+  
+  try {
+    const files = require('fs').readdirSync(platformDir)
+    for (const file of files) {
+      if (file.endsWith('.json')) {
+        const pageName = file.replace('.json', '')
+        const filePath = join(platformDir, file)
+        const content = readFileSync(filePath, 'utf-8')
+        result[pageName] = JSON.parse(content)
+      }
+    }
+  } catch (error) {
+    console.error('[Selector] 读取选择器失败:', error)
+  }
+  
+  return Object.keys(result).length > 0 ? result : getDefaultSelectors(platform)
+}
+
+/**
+ * 获取默认选择器配置
+ */
+function getDefaultSelectors(platform: string): Record<string, PageSelectors> {
+  const defaults: Record<string, Record<string, PageSelectors>> = {
+    pinduoduo: {
+      productCreate: {
+        page: 'productCreate',
+        urlPattern: '**.pinduoduo.com/**/goods/detail*',
+        version: '1.0.0',
+        updatedAt: new Date().toISOString(),
+        elements: {
+          title: { id: 'title', name: '商品标题', selector: 'input[placeholder*="商品标题"], [class*="title"] input', type: 'input', description: '商品标题输入框', required: true },
+          price: { id: 'price', name: '商品价格', selector: 'input[placeholder*="价格"], [class*="price"] input', type: 'input', description: '商品价格输入框', required: true },
+          stock: { id: 'stock', name: '库存数量', selector: 'input[placeholder*="库存"], [class*="stock"] input', type: 'input', description: '库存数量输入框', required: true },
+          submitBtn: { id: 'submitBtn', name: '提交按钮', selector: 'button[type="submit"], [class*="submit"] button', type: 'button', description: '提交/发布按钮', required: true },
+          uploadBtn: { id: 'uploadBtn', name: '图片上传', selector: '[class*="upload"], input[type="file"]', type: 'file', description: '图片上传按钮', required: false },
+        },
+      },
+      orderList: {
+        page: 'orderList',
+        urlPattern: '**.pinduoduo.com/**/order/list*',
+        version: '1.0.0',
+        updatedAt: new Date().toISOString(),
+        elements: {
+          orderTable: { id: 'orderTable', name: '订单表格', selector: 'table, [class*="order"] table', type: 'table', description: '订单列表表格', required: true },
+          shipBtn: { id: 'shipBtn', name: '发货按钮', selector: '[class*="ship"], [class*="deliver"]', type: 'button', description: '发货按钮', required: true },
+          orderId: { id: 'orderId', name: '订单号', selector: '[class*="order-id"], [class*="orderId"]', type: 'container', description: '订单号显示', required: false },
+        },
+      },
+    },
+    douyin: {
+      productCreate: {
+        page: 'productCreate',
+        urlPattern: '**.douyin.com/**/product/create*',
+        version: '1.0.0',
+        updatedAt: new Date().toISOString(),
+        elements: {
+          title: { id: 'title', name: '商品标题', selector: '[placeholder*="标题"], [class*="title"] input', type: 'input', description: '商品标题输入框', required: true },
+          price: { id: 'price', name: '商品价格', selector: '[placeholder*="价格"], [class*="price"] input', type: 'input', description: '商品价格输入框', required: true },
+          submitBtn: { id: 'submitBtn', name: '提交按钮', selector: 'button:has-text("发布"), [class*="submit"]', type: 'button', description: '提交/发布按钮', required: true },
+        },
+      },
+    },
+  }
+  
+  return defaults[platform] || {}
+}
+
+function savePageSelectors(platform: string, page: string, data: PageSelectors): void {
+  const platformDir = getPlatformSelectorsPath(platform)
+  mkdirSync(platformDir, { recursive: true })
+  const filePath = join(platformDir, `${page}.json`)
+  writeFileSync(filePath, JSON.stringify(data, null, 2))
+}
+
+function updatePageSelector(platform: string, page: string, selectorId: string, selector: SelectorDef): void {
+  const selectors = getPlatformSelectors(platform)
+  if (!selectors[page]) {
+    selectors[page] = {
+      page,
+      version: '1.0.0',
+      updatedAt: new Date().toISOString(),
+      elements: {},
+    }
+  }
+  selectors[page].elements[selectorId] = selector
+  selectors[page].updatedAt = new Date().toISOString()
+  savePageSelectors(platform, page, selectors[page])
+}
+
+function addPageSelector(platform: string, page: string, selectorId: string, selector: SelectorDef): void {
+  updatePageSelector(platform, page, selectorId, selector)
+}
+
+function deletePageSelector(platform: string, page: string, selectorId: string): void {
+  const selectors = getPlatformSelectors(platform)
+  if (selectors[page] && selectors[page].elements[selectorId]) {
+    delete selectors[page].elements[selectorId]
+    selectors[page].updatedAt = new Date().toISOString()
+    savePageSelectors(platform, page, selectors[page])
+  }
+}
+
+/**
+ * 注册 Selector 管理 IPC 处理器
+ */
+export function registerSelectorHandlers() {
+  // 获取平台选择器
+  ipcMain.handle('selector:get-platform', async (_, platform: string) => {
+    try {
+      return getPlatformSelectors(platform)
+    } catch (error) {
+      console.error('[Selector] 获取失败:', error)
+      return {}
+    }
+  })
+
+  // 更新选择器
+  ipcMain.handle('selector:update', async (_, platform: string, page: string, selectorId: string, selector: SelectorDef) => {
+    try {
+      updatePageSelector(platform, page, selectorId, selector)
+      return { success: true }
+    } catch (error) {
+      console.error('[Selector] 更新失败:', error)
+      throw error
+    }
+  })
+
+  // 添加选择器
+  ipcMain.handle('selector:add', async (_, platform: string, page: string, selectorId: string, selector: SelectorDef) => {
+    try {
+      addPageSelector(platform, page, selectorId, selector)
+      return { success: true }
+    } catch (error) {
+      console.error('[Selector] 添加失败:', error)
+      throw error
+    }
+  })
+
+  // 删除选择器
+  ipcMain.handle('selector:delete', async (_, platform: string, page: string, selectorId: string) => {
+    try {
+      deletePageSelector(platform, page, selectorId)
+      return { success: true }
+    } catch (error) {
+      console.error('[Selector] 删除失败:', error)
+      throw error
+    }
+  })
+
+  // 导入选择器
+  ipcMain.handle('selector:import', async (_, platform: string, data: any) => {
+    try {
+      if (data.pages) {
+        for (const [page, pageData] of Object.entries(data.pages)) {
+          savePageSelectors(platform, page, pageData as PageSelectors)
+        }
+      }
+      return { success: true }
+    } catch (error) {
+      console.error('[Selector] 导入失败:', error)
+      throw error
+    }
+  })
+
+  // 调试选择器 - 检测页面可用元素
+  ipcMain.handle('selector:debug', async (_, platform: string, page: string, url: string) => {
+    try {
+      const { chromium } = require('playwright')
+      
+      const browser = await chromium.launch({ headless: true })
+      const context = await browser.newContext({
+        viewport: { width: 1280, height: 720 },
+      })
+      const pageObj = await context.newPage()
+      
+      await pageObj.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 })
+      await pageObj.waitForTimeout(2000)
+      
+      const detected: Array<{ selector: string; count: number }> = []
+      
+      // 检测常用选择器
+      const commonSelectors = [
+        'input[type="text"]', 'input[type="number"]', 'input[type="password"]',
+        'textarea', 'select', 'button', 'a[href]',
+        'input[type="file"]', 'input[type="checkbox"]', 'input[type="radio"]',
+        '[placeholder]', '[class*="input"]', '[class*="btn"]', '[class*="button"]',
+        '[class*="search"]', '[class*="upload"]', '[class*="submit"]',
+        '[class*="title"]', '[class*="price"]', '[class*="stock"]',
+        '[class*="form"] input', '[class*="form"] button',
+        '[class*="modal"] input', '[class*="modal"] button',
+        '[class*="table"] input', '[class*="table"] button',
+        'table th', 'table td',
+      ]
+      
+      for (const selector of commonSelectors) {
+        try {
+          const count = await pageObj.locator(selector).count()
+          if (count > 0 && count < 100) {
+            detected.push({ selector, count })
+          }
+        } catch {
+          // 忽略无效选择器
+        }
+      }
+      
+      detected.sort((a, b) => b.count - a.count)
+      
+      await browser.close()
+      
+      return detected.slice(0, 20)
+    } catch (error) {
+      console.error('[Selector] 调试失败:', error)
+      throw error
+    }
+  })
+
+  // 测试选择器
+  ipcMain.handle('selector:test', async (_, platform: string, page: string, url: string) => {
+    try {
+      const selectors = getPlatformSelectors(platform)
+      const pageSelectors = selectors[page]?.elements || {}
+      const { chromium } = require('playwright')
+      
+      const browser = await chromium.launch({ headless: true })
+      const context = await browser.newContext({
+        viewport: { width: 1280, height: 720 },
+      })
+      const pageObj = await context.newPage()
+      
+      await pageObj.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 })
+      await pageObj.waitForTimeout(2000)
+      
+      const results: Record<string, { valid: boolean; count: number }> = {}
+      
+      for (const [name, def] of Object.entries(pageSelectors)) {
+        try {
+          const count = await pageObj.locator(def.selector).count()
+          results[name] = { valid: count > 0, count }
+        } catch {
+          results[name] = { valid: false, count: 0 }
+        }
+      }
+      
+      await browser.close()
+      
+      return results
+    } catch (error) {
+      console.error('[Selector] 测试失败:', error)
+      throw error
+    }
+  })
+
+  // 检测失效选择器
+  ipcMain.handle('selector:detect-broken', async (_, platform: string, pages: string[]) => {
+    try {
+      const selectors = getPlatformSelectors(platform)
+      const broken: string[] = []
+      
+      for (const page of pages) {
+        const pageData = selectors[page]
+        if (!pageData || !pageData.urlPattern) continue
+        
+        try {
+          const { chromium } = require('playwright')
+          const browser = await chromium.launch({ headless: true })
+          const context = await browser.newContext({
+            viewport: { width: 1280, height: 720 },
+          })
+          const pageObj = await context.newPage()
+          
+          // 构造测试 URL（使用 URLPattern 替换通配符）
+          const testUrl = pageData.urlPattern.replace(/\*\*/g, '').replace(/\*/g, '')
+          
+          await pageObj.goto(`https://${testUrl}`, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {})
+          await pageObj.waitForTimeout(2000)
+          
+          for (const [name, def] of Object.entries(pageData.elements)) {
+            try {
+              const count = await pageObj.locator(def.selector).count()
+              if (count === 0) {
+                broken.push(`${page}.${name}`)
+              }
+            } catch {
+              broken.push(`${page}.${name}`)
+            }
+          }
+          
+          await browser.close()
+        } catch (error) {
+          console.error(`[Selector] 检测页面 ${page} 失败:`, error)
+        }
+      }
+      
+      return broken
+    } catch (error) {
+      console.error('[Selector] 批量检测失败:', error)
+      return []
+    }
+  })
+
+  console.log('[Selector] IPC 处理器已注册')
+}
