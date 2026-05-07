@@ -1066,6 +1066,40 @@ export interface ElectronAPI {
 
   /** 测试选择器 */
   testSelector: (platform: string, profileId: string, selectorId: string, selector: string, pageUrl?: string) => Promise<any>
+
+  // ===== 商品上架执行 =====
+
+  /** 执行单个上架任务 */
+  executeListing: (task: {
+    profileId: string
+    platform: string
+    folderPath: string
+    folderName: string
+    title: string
+    price: number
+    description?: string
+    images: string[]
+    skus?: Array<{ code: string; stock: number; color?: string; size?: string }>
+  }) => Promise<{ success: boolean; productId?: string; productUrl?: string; error?: string; logs: string[] }>
+
+  /** 批量执行上架任务 */
+  executeBatchListing: (tasks: Array<{
+    profileId: string
+    platform: string
+    folderPath: string
+    folderName: string
+    title: string
+    price: number
+    description?: string
+    images: string[]
+    skus?: Array<{ code: string; stock: number; color?: string; size?: string }>
+  }>) => Promise<{ success: boolean; results: Array<{ taskId: string; success: boolean; productId?: string; productUrl?: string; error?: string }> }>
+
+  /** 取消任务 */
+  cancelTask: (taskId: string) => Promise<{ success: boolean }>
+
+  /** 获取活跃任务 */
+  getActiveTasks: () => Promise<any[]>
 }
 
 /**
@@ -2394,6 +2428,24 @@ const electronAPI: ElectronAPI = {
 
   testSelector: (platform: string, profileId: string, selectorId: string, selector: string, pageUrl?: string) => {
     return ipcRenderer.invoke('ecommerce:test-selector', platform, profileId, selectorId, selector, pageUrl)
+  },
+
+  // ===== 商品上架执行 =====
+
+  executeListing: (task: any) => {
+    return ipcRenderer.invoke('ecommerce:execute-listing', task)
+  },
+
+  executeBatchListing: (tasks: any[]) => {
+    return ipcRenderer.invoke('ecommerce:execute-batch-listing', tasks)
+  },
+
+  cancelTask: (taskId: string) => {
+    return ipcRenderer.invoke('ecommerce:cancel-task', taskId)
+  },
+
+  getActiveTasks: () => {
+    return ipcRenderer.invoke('ecommerce:get-active-tasks')
   },
 }
 

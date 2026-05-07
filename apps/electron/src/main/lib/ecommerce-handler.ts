@@ -523,6 +523,86 @@ export function registerEcommerceHandlers(): void {
   ipcMain.handle('ecommerce:get-recent-task-logs', async (_, limit?: number) => getTaskLogService().getRecent(limit))
   ipcMain.handle('ecommerce:get-task-logs-by-profile', async (_, profileId: string, limit?: number) => getTaskLogService().getByProfile(profileId, limit))
 
+  // ===== 商品上架执行 =====
+  ipcMain.handle('ecommerce:execute-listing', async (event, task: {
+    profileId: string
+    platform: string
+    folderPath: string
+    folderName: string
+    title: string
+    price: number
+    description?: string
+    images: string[]
+    skus?: Array<{ code: string; stock: number; color?: string; size?: string }>
+  }) => {
+    const { getProductListingService, ListingTask } = require('./ecommerce-listing-service')
+    const service = getProductListingService()
+
+    const listingTask: ListingTask = {
+      id: randomUUID(),
+      ...task,
+    }
+
+    const result = await service.executeListing(listingTask)
+
+    getListingRecordService().add({
+      profileId: task.profileId,
+      folderName: task.folderName,
+      title: task.title,
+      price: task.price,
+      images: task.images,
+      status: result.success ? 'success' : 'failed',
+      uploadedAt: new Date().toISOString(),
+      productUrl: result.productUrl,
+      productId: result.productId,
+      error: result.error,
+    })
+
+    return result
+  })
+
+  ipcMain.handle('ecommerce:execute-batch-listing', async (event, tasks: Array<{
+    profileId: string
+    platform: string
+    folderPath: string
+    folderName: string
+    title: string
+    price: number
+    description?: string
+    images: string[]
+    skus?: Array<{ code: string; stock: number; color?: string; size?: string }>
+  }>) => {
+    const { getProductListingService, ListingTask } = require('./ecommerce-listing-service')
+    const service = getProductListingService()
+
+    const listingTasks: ListingTask[] = tasks.map(t => ({
+      id: randomUUID(),
+      ...t,
+    }))
+
+    const results = await service.executeBatchListing(listingTasks)
+
+    const resultArray: Array<{ taskId: string; success: boolean; productId?: string; productUrl?: string; error?: string }> = []
+    results.forEach((value, key) => {
+      resultArray.push({ taskId: key, ...value })
+    })
+
+    return { success: true, results: resultArray }
+  })
+
+  ipcMain.handle('ecommerce:cancel-task', async (_, taskId: string) => {
+    const { getProductListingService } = require('./ecommerce-listing-service')
+    const service = getProductListingService()
+    service.cancelTask(taskId)
+    return { success: true }
+  })
+
+  ipcMain.handle('ecommerce:get-active-tasks', async () => {
+    const { getProductListingService } = require('./ecommerce-listing-service')
+    const service = getProductListingService()
+    return []
+  })
+
   console.log('[Ecommerce] IPC handlers registered')
 }
 
