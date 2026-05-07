@@ -1044,25 +1044,28 @@ export interface ElectronAPI {
   /** 按 Profile 获取任务日志 */
   getTaskLogsByProfile: (profileId: string, limit?: number) => Promise<any[]>
 
-  // ===== 预定义元素 & 映射 =====
+  // ===== 统一 Selector 管理 =====
 
-  /** 获取所有预定义元素 */
-  getPredefinedElements: () => Promise<{ elements: any; allIds: string[] }>
+  /** 获取预定义选择器列表 */
+  getPredefinedSelectors: () => Promise<{ selectors: any[]; grouped: Record<string, any[]> }>
 
-  /** 获取单个元素信息 */
-  getElementInfo: (elementId: string) => Promise<any>
+  /** 获取单个选择器定义 */
+  getSelectorDefinition: (id: string) => Promise<any>
 
-  /** 获取平台默认映射 */
-  getPlatformMapping: (platform: string) => Promise<any>
+  /** 获取平台选择器配置 */
+  getPlatformSelectors: (platform: string) => Promise<any>
 
-  /** 保存平台映射 */
-  savePlatformMapping: (platform: string, mapping: any) => Promise<{ success: boolean }>
+  /** 保存平台选择器配置 */
+  savePlatformSelectors: (platform: string, data: any) => Promise<{ success: boolean }>
 
-  /** 加载平台映射 */
-  loadPlatformMapping: (platform: string) => Promise<any>
+  /** 更新单个选择器配置 */
+  updateSelectorConfig: (platform: string, selectorId: string, config: any) => Promise<any>
 
-  /** 提取页面元素 */
-  extractElements: (platform: string, profileId: string, elementIds: string[], pageUrl?: string) => Promise<any>
+  /** 提取页面值 */
+  extractValues: (platform: string, profileId: string, selectorIds: string[], pageUrl?: string) => Promise<any>
+
+  /** 测试选择器 */
+  testSelector: (platform: string, profileId: string, selectorId: string, selector: string, pageUrl?: string) => Promise<any>
 }
 
 /**
@@ -2363,30 +2366,34 @@ const electronAPI: ElectronAPI = {
     return ipcRenderer.invoke('ecommerce:get-task-logs-by-profile', profileId, limit)
   },
 
-  // ===== 预定义元素 & 映射 =====
+  // ===== 统一 Selector 管理 =====
 
-  getPredefinedElements: () => {
-    return ipcRenderer.invoke('ecommerce:get-predefined-elements')
+  getPredefinedSelectors: () => {
+    return ipcRenderer.invoke('ecommerce:get-predefined-selectors')
   },
 
-  getElementInfo: (elementId: string) => {
-    return ipcRenderer.invoke('ecommerce:get-element-info', elementId)
+  getSelectorDefinition: (id: string) => {
+    return ipcRenderer.invoke('ecommerce:get-selector-definition', id)
   },
 
-  getPlatformMapping: (platform: string) => {
-    return ipcRenderer.invoke('ecommerce:get-platform-mapping', platform)
+  getPlatformSelectors: (platform: string) => {
+    return ipcRenderer.invoke('ecommerce:get-platform-selectors', platform)
   },
 
-  savePlatformMapping: (platform: string, mapping: any) => {
-    return ipcRenderer.invoke('ecommerce:save-platform-mapping', platform, mapping)
+  savePlatformSelectors: (platform: string, data: any) => {
+    return ipcRenderer.invoke('ecommerce:save-platform-selectors', platform, data)
   },
 
-  loadPlatformMapping: (platform: string) => {
-    return ipcRenderer.invoke('ecommerce:load-platform-mapping', platform)
+  updateSelectorConfig: (platform: string, selectorId: string, config: any) => {
+    return ipcRenderer.invoke('ecommerce:update-selector-config', platform, selectorId, config)
   },
 
-  extractElements: (platform: string, profileId: string, elementIds: string[], pageUrl?: string) => {
-    return ipcRenderer.invoke('ecommerce:extract-elements', platform, profileId, elementIds, pageUrl)
+  extractValues: (platform: string, profileId: string, selectorIds: string[], pageUrl?: string) => {
+    return ipcRenderer.invoke('ecommerce:extract-values', platform, profileId, selectorIds, pageUrl)
+  },
+
+  testSelector: (platform: string, profileId: string, selectorId: string, selector: string, pageUrl?: string) => {
+    return ipcRenderer.invoke('ecommerce:test-selector', platform, profileId, selectorId, selector, pageUrl)
   },
 }
 

@@ -1453,72 +1453,87 @@ export function registerEcommerceDataHandlers(): void {
     return getTaskLogService().getByProfile(profileId, limit)
   })
 
-  // ===== 元素提取处理器 =====
+  // ===== 统一 Selector 管理 =====
 
-  ipcMain.handle('ecommerce:get-predefined-elements', async () => {
-    const { PREDEFINED_ELEMENTS, ALL_PREDEFINED_IDS } = require('./ecommerce-elements')
-    return {
-      elements: PREDEFINED_ELEMENTS,
-      allIds: ALL_PREDEFINED_IDS,
+  ipcMain.handle('ecommerce:get-predefined-selectors', async () => {
+    const { PREDEFINED_SELECTORS, getCategoryLabel } = require('./ecommerce-elements')
+    const grouped: Record<string, any[]> = {}
+    for (const s of PREDEFINED_SELECTORS) {
+      if (!grouped[s.category]) grouped[s.category] = []
+      grouped[s.category].push({ ...s, categoryLabel: getCategoryLabel(s.category) })
     }
+    return { selectors: PREDEFINED_SELECTORS, grouped }
   })
 
-  ipcMain.handle('ecommerce:get-element-info', async (_, elementId: string) => {
-    const { getElementById } = require('./ecommerce-elements')
-    return getElementById(elementId)
+  ipcMain.handle('ecommerce:get-selector-definition', async (_, id: string) => {
+    const { getSelectorById } = require('./ecommerce-elements')
+    return getSelectorById(id)
   })
 
-  ipcMain.handle('ecommerce:get-platform-mapping', async (_, platform: string) => {
-    const { DEFAULT_PLATFORM_MAPPINGS, createDefaultMapping } = require('./ecommerce-elements')
-    return DEFAULT_PLATFORM_MAPPINGS[platform] || createDefaultMapping(platform)
-  })
-
-  ipcMain.handle('ecommerce:save-platform-mapping', async (_, platform: string, mapping: any) => {
+  ipcMain.handle('ecommerce:get-platform-selectors', async (_, platform: string) => {
     const fs = require('fs')
     const path = require('path')
     const { app } = require('electron')
-    const mappingDir = path.join(app.getPath('userData'), 'ecommerce', 'mappings')
-    if (!fs.existsSync(mappingDir)) {
-      fs.mkdirSync(mappingDir, { recursive: true })
-    }
-    const filePath = path.join(mappingDir, `${platform}.json`)
-    fs.writeFileSync(filePath, JSON.stringify(mapping, null, 2), 'utf-8')
-    return { success: true }
-  })
-
-  ipcMain.handle('ecommerce:load-platform-mapping', async (_, platform: string) => {
-    const fs = require('fs')
-    const path = require('path')
-    const { app } = require('electron')
-    const filePath = path.join(app.getPath('userData'), 'ecommerce', 'mappings', `${platform}.json`)
+    const filePath = path.join(app.getPath('userData'), 'ecommerce', 'selectors', `${platform}.json`)
     if (fs.existsSync(filePath)) {
       return JSON.parse(fs.readFileSync(filePath, 'utf-8'))
     }
-    const { DEFAULT_PLATFORM_MAPPINGS, createDefaultMapping } = require('./ecommerce-elements')
-    return DEFAULT_PLATFORM_MAPPINGS[platform] || createDefaultMapping(platform)
+    const { createDefaultPlatformSelectors } = require('./ecommerce-elements')
+    return createDefaultPlatformSelectors(platform)
   })
 
-  ipcMain.handle('ecommerce:extract-elements', async (_, platform: string, profileId: string, elementIds: string[], pageUrl?: string) => {
+  ipcMain.handle('ecommerce:save-platform-selectors', async (_, platform: string, data: any) => {
+    const fs = require('fs')
+    const path = require('path')
+    const { app } = require('electron')
+    const dir = path.join(app.getPath('userData'), 'ecommerce', 'selectors')
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    const filePath = path.join(dir, `${platform}.json`)
+    data.updatedAt = new Date().toISOString()
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
+    return { success: true }
+  })
+
+  ipcMain.handle('ecommerce:update-selector-config', async (_, platform: string, selectorId: string, config: any) => {
+    const { getSelectorById } = require('./ecommerce-elements')
+    const definition = getSelectorById(selectorId)
+    const fs = require('fs')
+    const path = require('path')
+    const { app } = require('electron')
+    const filePath = path.join(app.getPath('userData'), 'ecommerce', 'selectors', `${platform}.json`)
+    let data: any = { platform, version: '1.0.0', selectors: {} }
+    if (fs.existsSync(filePath)) {
+      data = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+    }
+    data.selectors[selectorId] = {
+      id: selectorId,
+      selector: config.selector || '',
+      extractMode: config.extractMode || definition?.extractMode || 'text',
+      attributes: config.attributes || definition?.attributes,
+      enabled: config.enabled ?? false,
+      priority: config.priority || 1,
+      lastTested: config.lastTested,
+    }
+    data.updatedAt = new Date().toISOString()
+    const dir = path.dirname(filePath)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
+    return data.selectors[selectorId]
+  })
+
+  ipcMain.handle('ecommerce:extract-values', async (_, platform: string, profileId: string, selectorIds: string[], pageUrl?: string) => {
     const profiles = loadProfiles()
     const profile = profiles.find(p => p.id === profileId)
-    if (!profile) {
-      throw new Error('Profile 不存在')
-    }
+    if (!profile) throw new Error('Profile 不存在')
 
     const loginStatus = checkLoginStatus(profile.profilePath)
-    if (!loginStatus.loggedIn) {
-      return { success: false, error: '请先登录店铺' }
-    }
+    if (!loginStatus.loggedIn) return { success: false, error: '请先登录店铺' }
 
     const { chromium } = require('playwright')
-    const { DEFAULT_PLATFORM_MAPPINGS, getElementById } = require('./ecommerce-elements')
+    const { getSelectorById } = require('./ecommerce-elements')
 
-    const mapping = DEFAULT_PLATFORM_MAPPINGS[platform] || { mappings: {} }
     const browser = await chromium.launch({ headless: true })
-    const context = await browser.newContext({
-      userDataDir: profile.profilePath,
-      viewport: { width: 1280, height: 720 },
-    })
+    const context = await browser.newContext({ userDataDir: profile.profilePath, viewport: { width: 1280, height: 720 } })
     const page = await context.newPage()
 
     const targetUrl = pageUrl || getDefaultProductListUrl(platform)
@@ -1527,62 +1542,104 @@ export function registerEcommerceDataHandlers(): void {
 
     const results: Record<string, any> = {}
 
-    for (const elementId of elementIds) {
-      const mappingEntry = mapping.mappings[elementId]
-      if (!mappingEntry || !mappingEntry.enabled) continue
+    for (const selectorId of selectorIds) {
+      const definition = getSelectorById(selectorId)
+      if (!definition) continue
 
-      const elementDef = getElementById(elementId)
-      if (!elementDef) continue
+      const selectorConfig = await getSelectorConfigForExtract(platform, selectorId)
+      if (!selectorConfig?.enabled) continue
 
-      const selectors = [mappingEntry.selector, ...elementDef.commonSelectors].filter(Boolean)
+      const selector = selectorConfig.selector
+      if (!selector) continue
 
-      for (const selector of selectors) {
-        try {
-          const count = await page.locator(selector).count()
-          if (count > 0) {
-            let value: any = null
+      try {
+        const count = await page.locator(selector).count()
+        if (count > 0) {
+          let value: any = null
 
-            if (elementDef.extractAs === 'data-id') {
-              const attrs = mappingEntry.customAttributes || elementDef.attributes || ['data-id']
+          switch (selectorConfig.extractMode) {
+            case 'element':
+              value = { count, found: true }
+              break
+            case 'data-id':
+              const attrs = selectorConfig.attributes || definition.attributes || []
               for (const attr of attrs) {
                 const attrValue = await page.locator(selector).first().getAttribute(attr)
-                if (attrValue) {
-                  value = attrValue
-                  break
-                }
+                if (attrValue) { value = attrValue; break }
               }
-            } else if (elementDef.extractAs === 'href') {
+              break
+            case 'href':
               value = await page.locator(selector).first().getAttribute('href')
-            } else if (elementDef.extractAs === 'src') {
+              break
+            case 'src':
               value = await page.locator(selector).first().getAttribute('src')
-            } else if (elementDef.extractAs === 'value') {
+              break
+            case 'value':
               value = await page.locator(selector).first().inputValue().catch(() => null)
-            } else if (elementDef.extractAs === 'innerHTML') {
+              break
+            case 'innerHTML':
               value = await page.locator(selector).first().innerHTML().catch(() => null)
-            } else {
+              break
+            default:
               value = await page.locator(selector).first().textContent()
-            }
-
-            results[elementId] = {
-              value,
-              selector,
-              count,
-              found: true,
-            }
-            break
           }
-        } catch {
-          continue
-        }
-      }
 
-      if (!results[elementId]) {
-        results[elementId] = { found: false, value: null }
+          results[selectorId] = { value, selector, count, found: true }
+        } else {
+          results[selectorId] = { found: false, value: null }
+        }
+      } catch {
+        results[selectorId] = { found: false, value: null }
       }
     }
 
     await browser.close()
     return { success: true, results }
+  })
+
+  ipcMain.handle('ecommerce:test-selector', async (_, platform: string, profileId: string, selectorId: string, selector: string, pageUrl?: string) => {
+    const profiles = loadProfiles()
+    const profile = profiles.find(p => p.id === profileId)
+    if (!profile) throw new Error('Profile 不存在')
+
+    const loginStatus = checkLoginStatus(profile.profilePath)
+    if (!loginStatus.loggedIn) return { success: false, error: '请先登录店铺' }
+
+    const { getSelectorById } = require('./ecommerce-elements')
+    const definition = getSelectorById(selectorId)
+
+    const { chromium } = require('playwright')
+    const browser = await chromium.launch({ headless: true })
+    const context = await browser.newContext({ userDataDir: profile.profilePath, viewport: { width: 1280, height: 720 } })
+    const page = await context.newPage()
+
+    const targetUrl = pageUrl || getDefaultProductListUrl(platform)
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 })
+    await page.waitForTimeout(2000)
+
+    const results: any[] = []
+
+    try {
+      const count = await page.locator(selector).count()
+      if (count > 0) {
+        for (let i = 0; i < Math.min(count, 5); i++) {
+          const loc = page.locator(selector).nth(i)
+          const text = await loc.textContent().catch(() => '')
+          const tagName = await loc.evaluate((el: Element) => el.tagName)
+          const attrs: Record<string, string> = {}
+          for (const attr of ['class', 'id', 'placeholder', 'data-id', 'data-product-id', 'href', 'src']) {
+            const val = await loc.getAttribute(attr)
+            if (val) attrs[attr] = val
+          }
+          results.push({ index: i, tagName, text: text?.trim().slice(0, 100), attributes: attrs })
+        }
+      }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : '选择器无效' }
+    }
+
+    await browser.close()
+    return { success: true, count, results, definition }
   })
 
   console.log('[EcommerceData] IPC 处理器已注册')
@@ -1597,6 +1654,22 @@ function getDefaultProductListUrl(platform: string): string {
     kuaishou: 'https://cp.kwaixiandian.com/goods/list',
   }
   return urls[platform] || 'https://www.baidu.com'
+}
+
+async function getSelectorConfigForExtract(platform: string, selectorId: string): Promise<any | null> {
+  const { createDefaultPlatformSelectors } = require('./ecommerce-elements')
+  const fs = require('fs')
+  const path = require('path')
+  const { app } = require('electron')
+  const filePath = path.join(app.getPath('userData'), 'ecommerce', 'selectors', `${platform}.json`)
+  let data: any = null
+  if (fs.existsSync(filePath)) {
+    data = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+  }
+  if (!data) {
+    data = createDefaultPlatformSelectors(platform)
+  }
+  return data.selectors[selectorId] || null
 }
 
 // 注册数据处理器
