@@ -258,11 +258,29 @@ async function configureMCP(): Promise<void> {
 async function installSkills(): Promise<void> {
   console.log('[Ecommerce] 安装 Skills...')
   
-  // 获取源目录
-  const sourceDir = join(__dirname, '..', '..', '..', '..', 'examples', 'ecommerce-workspace', 'skills')
+  // 获取默认 Skills 目录
+  const sourceDir = join(__dirname, '..', '..', '..', '..', 'default-skills')
+  const targetDir = join(WORKSPACE_DIR, 'skills')
   
-  // Skills 已在 createWorkspace 中创建
-  // 这里可以额外复制额外的 Skills
+  // 电商相关的 skills
+  const ecommerceSkills = [
+    'product-listing',
+    'content-collection',
+    'order-management',
+    'inventory-management',
+    'ecommerce-automation',
+  ]
+  
+  for (const skill of ecommerceSkills) {
+    const src = join(sourceDir, skill)
+    const dest = join(targetDir, skill)
+    
+    if (existsSync(src)) {
+      mkdirSync(dest, { recursive: true })
+      cpSync(src, dest, { recursive: true })
+      console.log(`[Ecommerce] 已安装 Skill: ${skill}`)
+    }
+  }
   
   console.log('[Ecommerce] Skills 安装完成')
 }

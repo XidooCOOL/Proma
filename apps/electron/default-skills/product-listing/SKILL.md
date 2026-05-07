@@ -1,80 +1,101 @@
 ---
 name: product-listing
-description: 电商平台商品上架自动化，支持拼多多、抖音等平台
-version: "1.0.0"
+description: 电商平台商品上架技能，支持多平台批量上架商品
+version: "2.0.0"
 ---
 
-# 商品上架助手
+# 商品上架技能
 
-## 功能
-- 自动填写商品信息
-- 上传商品图片
-- 选择商品分类
-- 填写商品描述
-- 批量上架多个商品
+## 功能概述
+使用 `list_product` 工具上架商品到电商平台。支持：
+- 单个或批量上架
+- 多平台同时上架
+- 多店铺隔离
 
-## 支持平台
-- 拼多多商家后台
-- 抖音电商后台
-- 淘宝卖家中心
-- 京东商家后台
+## 可用工具
 
-## 使用方法
+### list_product
+上架商品到电商平台。
 
-### 简单上架
+**参数：**
+```json
+{
+  "platform": "pinduoduo | douyin | taobao | jd | kuaishou",
+  "products": [
+    {
+      "title": "商品标题",
+      "price": 99.00,
+      "description": "商品描述",
+      "images": ["图片URL"],
+      "category": "类目",
+      "stock": 100
+    }
+  ],
+  "profile_id": "店铺Profile ID"
+}
 ```
-请帮我上架这个商品：
-- 标题：2024新款女装连衣裙
-- 价格：99元
-- 库存：100件
-- 图片：/Users/you/products/dress.jpg
+
+**示例调用：**
+```
+工具: list_product
+参数: {
+  "platform": "douyin",
+  "products": [
+    {
+      "title": "2024新款女装连衣裙",
+      "price": 99.00,
+      "description": "韩版修身显瘦",
+      "stock": 100
+    }
+  ]
+}
 ```
 
-### 批量上架
-```
-请帮我批量上架 /Users/you/products/ 目录下的所有商品
-```
+## 典型场景
 
-## 执行流程
+### 场景1：上架单个商品到抖音
+用户说："帮我上架这个商品到抖音，标题是夏季短袖，价格59元"
 
-### Step 1: 准备工作
-- 检查登录状态
-- 打开商品发布页面
+你应该：
+1. 调用 `list_product` 工具
+2. platform: "douyin"
+3. products: 包含用户提供的商品信息
 
-### Step 2: 填写基本信息
-- 商品标题（必填）
-- 商品价格（必填）
-- 商品库存（必填）
+### 场景2：批量上架到多个平台
+用户说："帮我把这3个商品同时上架到拼多多和抖音"
 
-### Step 3: 上传图片
-- 主图（必填）
-- 详情图（可选）
+你应该：
+1. 调用 `list_product` 工具 (platform: "pinduoduo")
+2. 调用 `list_product` 工具 (platform: "douyin")
+3. 两个调用并行执行
 
-### Step 4: 选择分类
-- 一级分类
-- 二级分类
-- 三级分类
+### 场景3：指定店铺上架
+用户说："上架到我的拼多多店铺A"
 
-### Step 5: 填写详情
-- 商品描述
-- 规格参数
-- 售后服务
+你应该：
+1. 先确认店铺对应的 profile_id
+2. 调用 `list_product` 时传入 profile_id
 
-### Step 6: 提交发布
-- 检查必填项
-- 提交审核
-- 确认成功
+## 支持的平台
 
-## 平台特定 URL
+| 平台 | platform 值 | 说明 |
+|------|-------------|------|
+| 拼多多 | pinduoduo | 拼多多商家后台 |
+| 抖音 | douyin | 抖音电商 creator 平台 |
+| 淘宝 | taobao | 淘宝卖家中心 |
+| 京东 | jd | 京东商家后台 |
+| 快手 | kuaishou | 快手电商 |
 
-| 平台 | 发布商品 URL |
-|------|-------------|
-| 拼多多 | https://mms.pinduoduo.com/goods/add |
-| 抖音 | https://partner.douyin.com/goods/add |
-| 淘宝 | https://upload.taobao.com/auction/publish |
-| 京东 | https://seller.jd.com/product/add |
+## 错误处理
+
+如果上架失败，检查：
+1. 店铺是否已登录（使用 check_store_status）
+2. 商品信息是否完整
+3. 图片是否可用
 
 ## 注意事项
-- 不同平台字段名称可能不同
-- 图片尺寸要求可能不同
-- 部分平台需要审核
+
+- price 必须是数字，单位为元
+- 图片建议使用网络URL
+- 部分平台需要审核才能上架
+- 多店铺时请使用对应的 profile_id

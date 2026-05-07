@@ -211,6 +211,47 @@ export function EcommerceSettings(): React.ReactElement {
         </Card>
       </div>
 
+      {/* Available Tools */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <ShoppingBag className="h-4 w-4" />
+            可用工具
+            <Badge variant="outline" className="ml-2 text-xs">MCP Server</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <ToolCard
+              name="list_product"
+              description="上架商品到电商平台"
+              platforms={['拼多多', '抖音', '淘宝', '京东', '快手']}
+            />
+            <ToolCard
+              name="collect_trends"
+              description="采集社交平台热门内容"
+              platforms={['小红书', '抖音', '微博', 'B站']}
+            />
+            <ToolCard
+              name="manage_orders"
+              description="订单管理、批量发货、退款"
+              platforms={['拼多多', '抖音', '淘宝', '京东']}
+            />
+            <ToolCard
+              name="update_inventory"
+              description="批量更新库存和价格"
+              platforms={['拼多多', '抖音', '淘宝', '京东']}
+            />
+          </div>
+          <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+            <p className="text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">使用说明：</span>
+              在 Agent 模式下，这些工具会自动加载。告诉 AI 你想要的操作（如"帮我上架商品到抖音"），AI 会自动调用对应的工具。
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Store Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {stores.map((store) => (
@@ -355,6 +396,30 @@ function StoreCard({ store, isActive, onSelect, onDelete }: StoreCardProps) {
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+interface ToolCardProps {
+  name: string
+  description: string
+  platforms: string[]
+}
+
+function ToolCard({ name, description, platforms }: ToolCardProps): React.ReactElement {
+  return (
+    <div className="p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+      <div className="font-mono text-sm font-medium text-primary mb-1">
+        {name}
+      </div>
+      <p className="text-xs text-muted-foreground mb-2">{description}</p>
+      <div className="flex flex-wrap gap-1">
+        {platforms.map((p) => (
+          <Badge key={p} variant="secondary" className="text-xs py-0">
+            {p}
+          </Badge>
+        ))}
+      </div>
+    </div>
   )
 }
 

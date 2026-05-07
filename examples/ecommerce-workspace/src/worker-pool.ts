@@ -8,6 +8,7 @@
  */
 
 import EventEmitter from 'events'
+import { v4 as uuidv4 } from 'uuid'
 import {
   Task,
   TaskGroup,
@@ -297,5 +298,294 @@ export class WorkerPool extends EventEmitter {
   destroy(): void {
     this.cleanup()
     this.removeAllListeners()
+  }
+
+  // ===== MCP 结构化工具实现 =====
+
+  /**
+   * 上架商品
+   */
+  async listProducts(browser: any, input: {
+    platform: string
+    products: Array<{
+      title: string
+      price: number
+      description?: string
+      images?: string[]
+      category?: string
+      stock?: number
+    }>
+    profile_id?: string
+  }): Promise<{ listed: number; failed: number; details: any[] }> {
+    console.log(`[WorkerPool] 上架商品到 ${input.platform}: ${input.products.length} 个`)
+
+    const worker = this.getAvailableOperationWorker(input.platform as Platform)
+    if (!worker) {
+      throw new Error('没有可用的运营 Worker')
+    }
+
+    const results: any[] = []
+    let listed = 0
+    let failed = 0
+
+    for (const product of input.products) {
+      try {
+        const task = {
+          id: uuidv4(),
+          type: 'operation' as const,
+          action: 'product-listing',
+          target: { platform: input.platform as Platform, profileId: input.profile_id },
+          data: { product },
+          status: 'pending' as const,
+          createdAt: Date.now()
+        }
+
+        const result = await worker.execute(task)
+        results.push({ product: product.title, success: true, result })
+        listed++
+      } catch (error) {
+        results.push({ 
+          product: product.title, 
+          success: false, 
+          error: error instanceof Error ? error.message : String(error) 
+        })
+        failed++
+      }
+    }
+
+    return { listed, failed, details: results }
+  }
+
+  /**
+   * 采集内容
+   */
+  async collectContent(browser: any, input: {
+    source: string
+    keywords: string[]
+    count: number
+    content_type?: string
+  }): Promise<{ id: string; collected: number; items: any[] }> {
+    console.log(`[WorkerPool] 采集内容 from ${input.source}: ${input.keywords.join(', ')}`)
+
+    const collectionId = uuidv4()
+    const worker = this.getAvailableCollectionWorker()
+    if (!worker) {
+      throw new Error('没有可用的采集 Worker')
+    }
+
+    const items: any[] = []
+
+    for (const keyword of input.keywords) {
+      try {
+        const task = {
+          id: uuidv4(),
+          type: 'collection' as const,
+          action: 'content-collection',
+          target: { source: input.source, keyword },
+          data: { count: input.count, contentType: input.content_type },
+          status: 'pending' as const,
+          createdAt: Date.now()
+        }
+
+        const result = await worker.execute(task)
+        items.push(...(result.items || []))
+      } catch (error) {
+        console.error(`[WorkerPool] 采集 ${keyword} 失败:`, error)
+      }
+    }
+
+    return { id: collectionId, collected: items.length, items }
+  }
+
+  /**
+   * 更新库存
+   */
+  async updateInventory(browser: any, input: {
+    platform: string
+    items: Array<{ product_id: string; stock?: number; price?: number }>
+    profile_id?: string
+  }): Promise<{ updated: number; failed: number }> {
+    console.log(`[WorkerPool] 更新库存 ${input.platform}: ${input.items.length} 个商品`)
+
+    const worker = this.getAvailableOperationWorker(input.platform as Platform)
+    if (!worker) {
+      throw new Error('没有可用的运营 Worker')
+    }
+
+    let updated = 0
+    let failed = 0
+
+    for (const item of input.items) {
+      try {
+        const task = {
+          id: uuidv4(),
+          type: 'operation' as const,
+          action: 'inventory-update',
+          target: { platform: input.platform as Platform, profileId: input.profile_id },
+          data: { productId: item.product_id, stock: item.stock, price: item.price },
+          status: 'pending' as const,
+          createdAt: Date.now()
+        }
+
+        await worker.execute(task)
+        updated++
+      } catch (error) {
+        failed++
+      }
+    }
+
+    return { updated, failed }
+  }
+
+  /**
+   * 列出订单
+   */
+  async listOrders(browser: any, platform: string): Promise<{ orders: any[]; total: number }> {
+    console.log(`[WorkerPool] 获取订单列表 ${platform}`)
+
+    const worker = this.getAvailableOperationWorker(platform as Platform)
+    if (!worker) {
+      throw new Error('没有可用的运营 Worker')
+    }
+
+    const task = {
+      id: uuidv4(),
+      type: 'operation' as const,
+      action: 'order-management',
+      target: { platform: platform as Platform },
+      data: { action: 'list' },
+      status: 'pending' as const,
+      createdAt: Date.now()
+    }
+
+    const result = await worker.execute(task)
+    return { orders: result.orders || [], total: result.total || 0 }
+  }
+
+  /**
+   * 批量发货
+   */
+  async batchShip(browser: any, platform: string, orderIds: string[]): Promise<{ shipped: number; failed: number }> {
+    console.log(`[WorkerPool] 批量发货 ${platform}: ${orderIds.length} 个订单`)
+
+    const worker = this.getAvailableOperationWorker(platform as Platform)
+    if (!worker) {
+      throw new Error('没有可用的运营 Worker')
+    }
+
+    let shipped = 0
+    let failed = 0
+
+    for (const orderId of orderIds) {
+      try {
+        const task = {
+          id: uuidv4(),
+          type: 'operation' as const,
+          action: 'order-management',
+          target: { platform: platform as Platform },
+          data: { action: 'ship', orderId },
+          status: 'pending' as const,
+          createdAt: Date.now()
+        }
+
+        await worker.execute(task)
+        shipped++
+      } catch (error) {
+        failed++
+      }
+    }
+
+    return { shipped, failed }
+  }
+
+  /**
+   * 处理退款
+   */
+  async handleRefunds(browser: any, platform: string, orderIds: string[]): Promise<{ processed: number; failed: number }> {
+    console.log(`[WorkerPool] 处理退款 ${platform}: ${orderIds.length} 个订单`)
+
+    const worker = this.getAvailableOperationWorker(platform as Platform)
+    if (!worker) {
+      throw new Error('没有可用的运营 Worker')
+    }
+
+    let processed = 0
+    let failed = 0
+
+    for (const orderId of orderIds) {
+      try {
+        const task = {
+          id: uuidv4(),
+          type: 'operation' as const,
+          action: 'order-management',
+          target: { platform: platform as Platform },
+          data: { action: 'refund', orderId },
+          status: 'pending' as const,
+          createdAt: Date.now()
+        }
+
+        await worker.execute(task)
+        processed++
+      } catch (error) {
+        failed++
+      }
+    }
+
+    return { processed, failed }
+  }
+
+  /**
+   * 检查登录状态
+   */
+  async checkLoginStatus(browser: any, platform: string): Promise<{ loggedIn: boolean; expiresAt?: string }> {
+    console.log(`[WorkerPool] 检查登录状态 ${platform}`)
+
+    const loginUrls: Record<string, string> = {
+      pinduoduo: 'https://mms.pinduoduo.com',
+      douyin: 'https://creator.douyin.com',
+      taobao: 'https://sell.taobao.com',
+      jd: 'https://passport.jd.com'
+    }
+
+    const url = loginUrls[platform]
+    if (!url) {
+      return { loggedIn: false }
+    }
+
+    try {
+      const page = await browser.newPage()
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10000 })
+      
+      const isLoggedIn = !page.url().includes('login')
+      await page.close()
+      
+      return { 
+        loggedIn: isLoggedIn,
+        expiresAt: isLoggedIn ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : undefined
+      }
+    } catch (error) {
+      return { loggedIn: false }
+    }
+  }
+
+  /**
+   * 打开登录页面
+   */
+  async openLoginPage(browser: any, platform: string): Promise<string> {
+    console.log(`[WorkerPool] 打开登录页面 ${platform}`)
+
+    const loginUrls: Record<string, string> = {
+      pinduoduo: 'https://mms.pinduoduo.com',
+      douyin: 'https://creator.douyin.com',
+      taobao: 'https://sell.taobao.com',
+      jd: 'https://passport.jd.com'
+    }
+
+    const url = loginUrls[platform]
+    if (!url) {
+      throw new Error(`不支持的平台: ${platform}`)
+    }
+
+    return url
   }
 }
