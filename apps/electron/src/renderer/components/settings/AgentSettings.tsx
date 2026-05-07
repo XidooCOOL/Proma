@@ -35,6 +35,7 @@ import { chatToolsAtom } from '@/atoms/chat-tool-atoms'
 import type { McpServerEntry, SkillMeta, OtherWorkspaceSkillsGroup, WorkspaceMcpConfig } from '@proma/shared'
 import { SettingsSection, SettingsCard, SettingsRow } from './primitives'
 import { McpServerForm } from './McpServerForm'
+import { EcommerceSettings } from './ecommerce'
 
 // ===== Types =====
 
@@ -414,16 +415,18 @@ ${skillList}
         <div className="relative flex rounded-xl bg-muted p-1">
           <div
             className={cn(
-              'mode-slider absolute top-1 bottom-1 w-[calc(33.333%-3px)] rounded-lg bg-background shadow-sm transition-transform duration-300 ease-in-out',
+              'mode-slider absolute top-1 bottom-1 w-[calc(25%-3px)] rounded-lg bg-background shadow-sm transition-transform duration-300 ease-in-out',
               activeTab === 'skills' && 'translate-x-0',
-              activeTab === 'mcp' && 'translate-x-[100%]',
-              activeTab === 'tools' && 'translate-x-[200%]',
+              activeTab === 'mcp' && 'translate-x-[133%]',
+              activeTab === 'tools' && 'translate-x-[266%]',
+              activeTab === 'ecommerce' && 'translate-x-[400%]',
             )}
           />
           {[
             { value: 'skills', label: 'Skills' },
             { value: 'mcp', label: 'MCP' },
             { value: 'tools', label: '内置工具' },
+            { value: 'ecommerce', label: '🏪 电商' },
           ].map(({ value, label }) => (
             <button
               key={value}
@@ -566,6 +569,11 @@ ${skillList}
         {/* ===== Built-in Tools Tab ===== */}
         <TabsContent value="tools" className="mt-4">
           <BuiltinAgentTools />
+        </TabsContent>
+
+        {/* ===== Ecommerce Tab ===== */}
+        <TabsContent value="ecommerce" className="mt-4">
+          <EcommerceSettings />
         </TabsContent>
       </Tabs>
 

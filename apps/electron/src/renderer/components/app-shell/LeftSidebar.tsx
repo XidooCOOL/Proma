@@ -17,6 +17,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { ModeSwitcher } from './ModeSwitcher'
 import { SearchDialog } from './SearchDialog'
 import { UserAvatar } from '@/components/chat/UserAvatar'
+import { StoreSwitcher } from '@/components/ecommerce'
 import { activeViewAtom } from '@/atoms/active-view'
 import { appModeAtom } from '@/atoms/app-mode'
 import { settingsTabAtom, settingsOpenAtom } from '@/atoms/settings-tab'
@@ -938,6 +939,13 @@ export function LeftSidebar({ width }: LeftSidebarProps): React.ReactElement {
       {mode === 'agent' && (
         <div className="px-3 pt-2">
           <WorkspaceSelector />
+        </div>
+      )}
+
+      {/* 电商店铺切换器 - 在 Agent 模式下显示 */}
+      {mode === 'agent' && (
+        <div className="px-3 pt-1">
+          <StoreSwitcher />
         </div>
       )}
 
