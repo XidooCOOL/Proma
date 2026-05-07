@@ -588,7 +588,7 @@ ${skillList}
 
         {/* ===== Ecommerce Tab ===== */}
         <TabsContent value="ecommerce" className="mt-4">
-          {state.isEcommerceEnabled ? <EcommerceSettings /> : <EcommerceSetup />}
+          {isEcommerceEnabled ? <EcommerceSettings /> : <EcommerceSetup />}
         </TabsContent>
       </Tabs>
 
