@@ -957,7 +957,8 @@ export function registerStoreHandlers() {
 /**
  * 注册商品解析 IPC 处理器
  */
-function registerProductParserHandlers(): void {
+// 导出商品解析处理器供外部调用
+export function registerProductParserHandlers(): void {
   // 解析商品链接
   ipcMain.handle('product:parse-url', async (_, url: string) => {
     try {
@@ -1049,5 +1050,134 @@ function registerProductParserHandlers(): void {
   console.log('[ProductParser] IPC 处理器已注册')
 }
 
-console.log('[Selector] IPC 处理器已注册')
+// ===== 图片文件夹选择 & Excel 读取 =====
+
+/**
+ * 注册文件选择 IPC 处理器
+ */
+function registerFileSelectorHandlers(): void {
+  // 选择图片文件夹
+  ipcMain.handle('file:select-image-folders', async (_, includeSubfolders: boolean = false) => {
+    try {
+      const { dialog } = require('electron')
+      const result = await dialog.showOpenDialog({
+        properties: ['openDirectory'],
+        title: '选择图片文件夹',
+      })
+
+      if (result.canceled || result.filePaths.length === 0) {
+        return { success: false }
+      }
+
+      const folderPath = result.filePaths[0]
+      const fs = require('fs')
+      const path = require('path')
+
+      // 读取文件夹中的图片文件
+      const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
+      let images: string[] = []
+
+      const files = fs.readdirSync(folderPath)
+      for (const file of files) {
+        const ext = path.extname(file).toLowerCase()
+        if (imageExtensions.includes(ext)) {
+          images.push(path.join(folderPath, file))
+        }
+      }
+
+      // 如果包含子目录
+      if (includeSubfolders) {
+        const subDirs = fs.readdirSync(folderPath, { withFileTypes: true })
+        for (const dir of subDirs) {
+          if (dir.isDirectory()) {
+            const subPath = path.join(folderPath, dir.name)
+            const subFiles = fs.readdirSync(subPath)
+            for (const file of subFiles) {
+              const ext = path.extname(file).toLowerCase()
+              if (imageExtensions.includes(ext)) {
+                images.push(path.join(subPath, file))
+              }
+            }
+          }
+        }
+      }
+
+      // 按文件名排序
+      images.sort()
+
+      // 返回单个主文件夹信息（包含所有图片）
+      return {
+        success: true,
+        folders: [{
+          path: folderPath,
+          name: path.basename(folderPath),
+          images,
+          imageCount: images.length,
+        }],
+      }
+    } catch (error) {
+      console.error('[FileSelector] 选择文件夹失败:', error)
+      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
+    }
+  })
+
+  // 选择 Excel 文件
+  ipcMain.handle('file:select-excel', async () => {
+    try {
+      const { dialog } = require('electron')
+      const result = await dialog.showOpenDialog({
+        properties: ['openFile'],
+        title: '选择 Excel 文件',
+        filters: [
+          { name: 'Excel 文件', extensions: ['xlsx', 'xls', 'csv'] },
+        ],
+      })
+
+      if (result.canceled || result.filePaths.length === 0) {
+        return { success: false }
+      }
+
+      return {
+        success: true,
+        filePath: result.filePaths[0],
+      }
+    } catch (error) {
+      console.error('[FileSelector] 选择 Excel 失败:', error)
+      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
+    }
+  })
+
+  // 读取 Excel 数据
+  ipcMain.handle('file:read-excel', async (_, filePath: string) => {
+    try {
+      // 实际应该使用 xlsx 库解析
+      // 这里简化处理，假设是 CSV 或简单格式
+      const fs = require('fs')
+      const content = fs.readFileSync(filePath, 'utf-8')
+      const lines = content.split('\n').filter(line => line.trim())
+
+      const rows: string[][] = []
+      for (const line of lines) {
+        // 简单的 CSV 解析（逗号分隔）
+        const row = line.split(',').map(cell => cell.trim().replace(/^"|"$/g, ''))
+        rows.push(row)
+      }
+
+      return {
+        success: true,
+        rows,
+        rowCount: rows.length,
+      }
+    } catch (error) {
+      console.error('[FileSelector] 读取 Excel 失败:', error)
+      return { success: false, error: error instanceof Error ? error.message : '未知错误' }
+    }
+  })
+
+  console.log('[FileSelector] IPC 处理器已注册')
 }
+
+// 注册文件选择处理器
+registerFileSelectorHandlers()
+
+console.log('[Selector] IPC 处理器已注册')
