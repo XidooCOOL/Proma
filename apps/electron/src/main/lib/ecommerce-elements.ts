@@ -26,7 +26,6 @@ export interface SelectorConfig {
   extractMode: ExtractMode
   attributes?: string[]
   enabled: boolean
-  priority: number
   lastTested?: string
 }
 
@@ -37,8 +36,16 @@ export interface PlatformSelectors {
   selectors: Record<string, SelectorConfig>
 }
 
+export const CATEGORIES = [
+  { id: 'product_info', label: 'Product Info', labelZh: '商品信息' },
+  { id: 'form_input', label: 'Form Input', labelZh: '表单输入' },
+  { id: 'action', label: 'Action', labelZh: '操作按钮' },
+  { id: 'upload', label: 'Upload', labelZh: '上传区域' },
+  { id: 'result', label: 'Result', labelZh: '结果反馈' },
+] as const
+
 export const PREDEFINED_SELECTORS: SelectorDefinition[] = [
-  { id: 'product_id', category: 'product_info', label: 'Product ID', labelZh: '商品ID', description: '商品唯一标识符', extractMode: 'data-id', attributes: ['data-product-id', 'data-goods-id', 'data-item-id', 'id'] },
+  { id: 'product_id', category: 'product_info', label: 'Product ID', labelZh: '商品ID', description: '商品唯一标识符', extractMode: 'data-id', attributes: ['data-product-id', 'data-goods-id', 'data-item-id'] },
   { id: 'product_title', category: 'product_info', label: 'Product Title', labelZh: '商品标题', description: '商品显示标题', extractMode: 'text' },
   { id: 'product_url', category: 'product_info', label: 'Product URL', labelZh: '商品链接', description: '商品详情页链接', extractMode: 'href' },
   { id: 'product_price', category: 'product_info', label: 'Product Price', labelZh: '商品价格', description: '商品售价', extractMode: 'text' },
@@ -70,49 +77,6 @@ export const PREDEFINED_SELECTORS: SelectorDefinition[] = [
   { id: 'modal_error', category: 'result', label: 'Error Modal', labelZh: '错误弹窗', description: '错误信息弹窗', extractMode: 'innerHTML' },
 ]
 
-export const DEFAULT_SELECTORS: Record<string, Record<string, SelectorConfig>> = {
-  pinduoduo: {
-    product_id: { id: 'product_id', selector: '[data-product-id], [class*="goods-id"]', extractMode: 'data-id', attributes: ['data-product-id', 'data-goods-id'], enabled: true, priority: 1 },
-    product_title: { id: 'product_title', selector: '[class*="goods-title"], [class*="product-title"]', extractMode: 'text', enabled: true, priority: 1 },
-    product_price: { id: 'product_price', selector: '[class*="price"]:not([class*="original"])', extractMode: 'text', enabled: true, priority: 1 },
-    input_title: { id: 'input_title', selector: 'input[placeholder*="商品标题"], [class*="title"] input', extractMode: 'element', enabled: true, priority: 1 },
-    input_price: { id: 'input_price', selector: 'input[placeholder*="价格"], [class*="price"] input', extractMode: 'element', enabled: true, priority: 1 },
-    input_stock: { id: 'input_stock', selector: 'input[placeholder*="库存"], [class*="stock"] input', extractMode: 'element', enabled: true, priority: 1 },
-    input_description: { id: 'input_description', selector: 'textarea[placeholder*="商品描述"]', extractMode: 'element', enabled: true, priority: 1 },
-    btn_submit: { id: 'btn_submit', selector: 'button:has-text("发布商品"), [class*="submit"] button', extractMode: 'element', enabled: true, priority: 1 },
-    upload_main_image: { id: 'upload_main_image', selector: '[class*="main-image"] input[type="file"]', extractMode: 'element', enabled: true, priority: 1 },
-    toast_success: { id: 'toast_success', selector: '[class*="toast"]:has-text("发布成功")', extractMode: 'text', enabled: true, priority: 1 },
-  },
-  douyin: {
-    product_id: { id: 'product_id', selector: '[data-product-id]', extractMode: 'data-id', attributes: ['data-product-id'], enabled: true, priority: 1 },
-    product_title: { id: 'product_title', selector: '[class*="product-title"]', extractMode: 'text', enabled: true, priority: 1 },
-    product_price: { id: 'product_price', selector: '[class*="price"]', extractMode: 'text', enabled: true, priority: 1 },
-    input_title: { id: 'input_title', selector: 'input[placeholder*="标题"]', extractMode: 'element', enabled: true, priority: 1 },
-    input_price: { id: 'input_price', selector: 'input[placeholder*="价格"]', extractMode: 'element', enabled: true, priority: 1 },
-    btn_submit: { id: 'btn_submit', selector: 'button:has-text("发布"), button:has-text("确认")', extractMode: 'element', enabled: true, priority: 1 },
-    upload_images: { id: 'upload_images', selector: '[class*="upload"] input[type="file"]', extractMode: 'element', enabled: true, priority: 1 },
-    toast_success: { id: 'toast_success', selector: '[class*="toast"]:has-text("发布成功")', extractMode: 'text', enabled: true, priority: 1 },
-  },
-  taobao: {
-    product_id: { id: 'product_id', selector: '[data-itemid]', extractMode: 'data-id', attributes: ['data-itemid'], enabled: true, priority: 1 },
-    product_title: { id: 'product_title', selector: '[class*="item-title"], h3[class*="title"]', extractMode: 'text', enabled: true, priority: 1 },
-    product_price: { id: 'product_price', selector: '[class*="price"]', extractMode: 'text', enabled: true, priority: 1 },
-    input_title: { id: 'input_title', selector: '#title, input[name="title"]', extractMode: 'element', enabled: true, priority: 1 },
-    input_price: { id: 'input_price', selector: '#price, input[name="price"]', extractMode: 'element', enabled: true, priority: 1 },
-    btn_submit: { id: 'btn_submit', selector: 'button:has-text("发布"), button:has-text("上架")', extractMode: 'element', enabled: true, priority: 1 },
-    upload_main_image: { id: 'upload_main_image', selector: '[class*="main-pic"] input[type="file"]', extractMode: 'element', enabled: true, priority: 1 },
-  },
-  jd: {
-    product_id: { id: 'product_id', selector: '[data-sku]', extractMode: 'data-id', attributes: ['data-sku'], enabled: true, priority: 1 },
-    product_title: { id: 'product_title', selector: '[class*="product-name"], h3[class*="name"]', extractMode: 'text', enabled: true, priority: 1 },
-    product_price: { id: 'product_price', selector: '[class*="price"], [class*="jd-price"]', extractMode: 'text', enabled: true, priority: 1 },
-    input_title: { id: 'input_title', selector: 'input[placeholder*="商品名称"]', extractMode: 'element', enabled: true, priority: 1 },
-    input_price: { id: 'input_price', selector: 'input[placeholder*="价格"]', extractMode: 'element', enabled: true, priority: 1 },
-    btn_submit: { id: 'btn_submit', selector: 'button:has-text("提交"), button:has-text("发布")', extractMode: 'element', enabled: true, priority: 1 },
-    toast_success: { id: 'toast_success', selector: '[class*="message"]:has-text("发布成功")', extractMode: 'text', enabled: true, priority: 1 },
-  },
-}
-
 export function getSelectorById(id: string): SelectorDefinition | undefined {
   return PREDEFINED_SELECTORS.find(s => s.id === id)
 }
@@ -121,17 +85,15 @@ export function getSelectorsByCategory(category: string): SelectorDefinition[] {
   return PREDEFINED_SELECTORS.filter(s => s.category === category)
 }
 
-export function createDefaultPlatformSelectors(platform: string): PlatformSelectors {
-  const defaults = DEFAULT_SELECTORS[platform] || {}
+export function createEmptyPlatformSelectors(platform: string): PlatformSelectors {
   const selectors: Record<string, SelectorConfig> = {}
   for (const def of PREDEFINED_SELECTORS) {
     selectors[def.id] = {
       id: def.id,
-      selector: defaults[def.id]?.selector || '',
+      selector: '',
       extractMode: def.extractMode,
-      attributes: def.attributes || defaults[def.id]?.attributes,
-      enabled: defaults[def.id]?.enabled ?? false,
-      priority: 1,
+      attributes: def.attributes,
+      enabled: false,
     }
   }
   return {
@@ -143,12 +105,22 @@ export function createDefaultPlatformSelectors(platform: string): PlatformSelect
 }
 
 export function getCategoryLabel(category: string): string {
-  const labels: Record<string, string> = {
-    product_info: '商品信息',
-    form_input: '表单输入',
-    action: '操作按钮',
-    upload: '上传区域',
-    result: '结果反馈',
-  }
-  return labels[category] || category
+  const cat = CATEGORIES.find(c => c.id === category)
+  return cat?.labelZh || category
+}
+
+export const PLATFORM_LIST = [
+  { id: 'pinduoduo', label: '拼多多' },
+  { id: 'douyin', label: '抖音' },
+  { id: 'taobao', label: '淘宝' },
+  { id: 'jd', label: '京东' },
+  { id: 'kuaishou', label: '快手' },
+]
+
+export const DEFAULT_TEST_URLS: Record<string, string> = {
+  pinduoduo: 'https://mms.pinduoduo.com/goods/list',
+  douyin: 'https://creator.douyin.com/product/list',
+  taobao: 'https://upload.taobao.com/',
+  jd: 'https://seller.jd.com/商品管理',
+  kuaishou: 'https://cp.kwaixiandian.com/goods/list',
 }
