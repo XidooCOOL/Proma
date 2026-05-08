@@ -65,11 +65,38 @@ const platformConfig: Record<string, { label: string; color: string }> = {
   kuaishou: { label: '快手', color: 'bg-orange-500' },
 }
 
+interface TaskGroup {
+  platform: string
+  platformName: string
+  profileId: string
+  profileName: string
+  tasks: Array<{
+    productId: string
+    productName: string
+    folderName: string
+    folderPath: string
+    images: string[]
+    baseInfo?: {
+      title: string
+      price: number
+      description?: string
+    }
+    skus?: Array<{
+      code: string
+      stock: number
+      color?: string
+      size?: string
+    }>
+  }>
+}
+
 export function EcommerceSettings(): React.ReactElement {
   const [profiles, setProfiles] = React.useState<StoreProfile[]>([])
   const [loading, setLoading] = React.useState(true)
   const [createDialogOpen, setCreateDialogOpen] = React.useState(false)
   const [importWizardOpen, setImportWizardOpen] = React.useState(false)
+  const [pendingTaskGroups, setPendingTaskGroups] = React.useState<TaskGroup[]>([])
+  const [autoStartTasks, setAutoStartTasks] = React.useState(false)
 
   const loadProfiles = React.useCallback(async () => {
     setLoading(true)
@@ -112,9 +139,29 @@ export function EcommerceSettings(): React.ReactElement {
     }
   }
 
-  const handleStartImport = (taskGroups: any[]) => {
+  const handleStartImport = (wizardGroups: any[]) => {
     setImportWizardOpen(false)
-    toast.success(`已生成 ${taskGroups.length} 个任务组`)
+
+    const groups: TaskGroup[] = wizardGroups.map(g => ({
+      platform: g.platform,
+      platformName: g.platformName,
+      profileId: g.profileId,
+      profileName: g.profileName,
+      tasks: g.tasks.map((t: any) => ({
+        productId: t.productId,
+        productName: t.productName,
+        folderName: t.folderName,
+        folderPath: '',
+        images: t.images || [],
+        baseInfo: t.baseInfo,
+        skus: t.skus,
+      })),
+    }))
+
+    setPendingTaskGroups(groups)
+    setAutoStartTasks(true)
+
+    toast.success(`已生成 ${groups.length} 个任务组，共 ${groups.reduce((s, g) => s + g.tasks.length, 0)} 个任务`)
   }
 
   const availableTargets = profiles.map(p => ({
@@ -185,7 +232,16 @@ export function EcommerceSettings(): React.ReactElement {
         </TabsContent>
 
         <TabsContent value="monitor" className="flex-1 overflow-hidden p-0 mt-0">
-          <TaskMonitorPanel />
+          <TaskMonitorPanel
+            taskGroups={pendingTaskGroups}
+            autoStart={autoStartTasks}
+            onTaskGroupsChange={(groups) => {
+              if (groups.length === 0) {
+                setPendingTaskGroups([])
+                setAutoStartTasks(false)
+              }
+            }}
+          />
         </TabsContent>
       </Tabs>
 
