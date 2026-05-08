@@ -15,6 +15,8 @@ import {
   Maximize2,
   Minimize2,
   Trash2,
+  RotateCcw,
+  SkipForward,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -242,6 +244,38 @@ export function TaskMonitorPanel({ taskGroups = [], autoStart = false }: TaskMon
     if (group) executeGroup(group)
   }
 
+  const handleRetryFailed = async (groupId: string) => {
+    const group = groups.find(g => g.id === groupId)
+    if (!group) return
+
+    const failedTasks = group.tasks.filter(t => t.status === 'failed')
+    if (failedTasks.length === 0) {
+      toast.info('没有失败的任务')
+      return
+    }
+
+    toast.info(`重试 ${failedTasks.length} 个失败任务...`)
+
+    for (const task of failedTasks) {
+      updateTaskStatus(groupId, task.id, { status: 'pending', progress: 0, error: undefined, logs: [] })
+    }
+
+    await executeGroup(group)
+  }
+
+  const handleSkipFailed = (groupId: string) => {
+    setGroups(prev => prev.map(g => {
+      if (g.id !== groupId) return g
+      return {
+        ...g,
+        tasks: g.tasks.map(t => {
+          if (t.status === 'failed') return { ...t, status: 'skipped' }
+          return t
+        }),
+      }
+    }))
+  }
+
   const toggleGroup = (groupId: string) => {
     setExpandedGroups(prev => {
       const next = new Set(prev)
@@ -446,6 +480,16 @@ function TaskGroupCard({
                 <Play className="h-3 w-3" />
               </Button>
             )}
+            {group.status !== 'pending' && failedCount > 0 && (
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" className="h-7" onClick={() => handleRetryFailed(group.id)} title="重试失败">
+                  <RotateCcw className="h-3 w-3" />
+                </Button>
+                <Button variant="ghost" size="sm" className="h-7" onClick={() => handleSkipFailed(group.id)} title="跳过失败">
+                  <SkipForward className="h-3 w-3" />
+                </Button>
+              </div>
+            )}
           </div>
         </div>
         <Progress value={group.progress} className="h-1 mt-2" />
@@ -471,6 +515,7 @@ function TaskItemRow({ task }: { task: TaskItem }): React.ReactElement {
       task.status === 'running' && 'bg-blue-50/50 border-blue-200',
       task.status === 'completed' && 'bg-green-50/50 border-green-200',
       task.status === 'failed' && 'bg-red-50/50 border-red-200',
+      task.status === 'skipped' && 'bg-gray-50/50 border-gray-200 opacity-60',
     )}>
       <div className="flex items-center gap-2">
         <div className="w-6 h-6 flex-shrink-0">
@@ -493,9 +538,10 @@ function TaskItemRow({ task }: { task: TaskItem }): React.ReactElement {
           {task.status === 'completed' && <CheckCircle2 className="h-3 w-3 mr-1" />}
           {task.status === 'failed' && <XCircle className="h-3 w-3 mr-1" />}
           {task.status === 'running' && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
-          {task.status === 'pending' && '待执行'}
           {task.status === 'completed' && '完成'}
           {task.status === 'failed' && '失败'}
+          {task.status === 'skipped' && '已跳过'}
+          {task.status === 'pending' && '待执行'}
         </Badge>
         {task.productId && (
           <Badge variant="outline" className="text-xs font-mono">
