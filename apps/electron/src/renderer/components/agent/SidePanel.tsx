@@ -774,17 +774,10 @@ function AttachedDirItem({ entry, depth, selectedPaths, onSelect, refreshVersion
           <span className="truncate text-xs flex-1">{currentName}</span>
         )}
 
-        {/* 右侧操作按钮占位 */}
-        <div
-          className={cn(
-            'flex-shrink-0',
-            !(isSelected && !isRenaming) && !(onAddToChat && !entry.isDirectory && !isRenaming) && 'invisible',
-          )}
-          onClick={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
+        {/* 右侧操作按钮 */}
+        <div className="flex-shrink-0">
           {/* 非文件夹未选中：添加到聊天按钮（悬浮时显示） */}
-          {onAddToChat && !entry.isDirectory && !isRenaming && !(isSelected && !isRenaming) && (
+          {onAddToChat && !entry.isDirectory && !isRenaming && !isSelected && (
             <button
               type="button"
               className="h-6 w-6 rounded flex items-center justify-center hover:bg-accent/70 text-muted-foreground hover:text-foreground invisible group-hover:visible"
@@ -796,15 +789,16 @@ function AttachedDirItem({ entry, depth, selectedPaths, onSelect, refreshVersion
           )}
           {/* 选中状态：三点菜单 */}
           {isSelected && !isRenaming && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="h-6 w-6 rounded flex items-center justify-center hover:bg-accent/70"
-              >
-                <MoreHorizontal className="size-3.5" />
-              </button>
-            </DropdownMenuTrigger>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="h-6 w-6 rounded flex items-center justify-center hover:bg-accent/70"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MoreHorizontal className="size-3.5" />
+                </button>
+              </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-40 z-[9999] min-w-0 p-0.5">
                 {onAddToChat && !entry.isDirectory && (
                   <DropdownMenuItem
