@@ -86,10 +86,7 @@ export function createEmptyPlatformSelectors(platform: string): { platform: stri
 
 export function loadPlatformSelectors(platform: string): any {
   const filePath = getPlatformSelectorsPath(platform)
-  if (readJson(filePath, null)) {
-    return readJson(filePath, createEmptyPlatformSelectors(platform))
-  }
-  return createEmptyPlatformSelectors(platform)
+  return readJson(filePath, createEmptyPlatformSelectors(platform))
 }
 
 export function savePlatformSelectors(platform: string, data: any): void {

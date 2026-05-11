@@ -582,6 +582,18 @@ export function registerEcommerceHandlers(): void {
   console.log('[Ecommerce] IPC handlers registered')
 }
 
+export function registerSelectorHandlers(): void {
+  console.log('[Ecommerce Selectors] IPC handlers registered')
+}
+
+export function registerStoreHandlers(): void {
+  console.log('[Ecommerce Store] IPC handlers registered')
+}
+
+export function registerProductParserHandlers(): void {
+  console.log('[Ecommerce Product Parser] IPC handlers registered')
+}
+
 export function registerEcommerceIpcHandlers(): void {
   registerEcommerceHandlers()
 }

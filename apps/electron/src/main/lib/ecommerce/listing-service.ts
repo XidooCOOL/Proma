@@ -8,14 +8,9 @@ import {
   getStoreProfileService,
   getListingRecordService,
 } from './data-service'
-import {
-  getConfigManager,
-  getEcommerceSettings,
-  getPlatformSettings,
-} from './config'
+import { DEFAULT_CONFIG } from './config'
 import {
   ecommerceLogger,
-  getErrorHandler,
 } from './error'
 import {
   getProfilePath,
@@ -111,9 +106,7 @@ export class ProductListingService {
     const logs: string[] = []
     const taskState = { cancelled: false }
     this.activeTasks.set(taskId, taskState)
-    const errorHandler = getErrorHandler()
-    const settings = getEcommerceSettings()
-    const maxAttempts = options?.maxAttempts || settings.retryAttempts
+    const maxAttempts = options?.maxAttempts || DEFAULT_CONFIG.maxRetries
 
     const addLog = (msg: string) => {
       logs.push(`[${new Date().toLocaleTimeString()}] ${msg}`)
@@ -131,10 +124,8 @@ export class ProductListingService {
 
         const profile = getStoreProfileService().getById(task.profileId)
         if (!profile) {
-          throw errorHandler.handleError(new Error('店铺不存在'), 'executeListing')
+          throw new Error('店铺不存在')
         }
-
-        const platformSettings = getPlatformSettings(task.platform)
 
         addLog(`使用店铺: ${profile.name} (${task.platform})`)
 
@@ -142,7 +133,7 @@ export class ProductListingService {
         const cookiesFile = getProfileCookiesPath(task.profileId)
 
         if (!readJson(cookiesFile, null)) {
-          throw errorHandler.handleError(new Error('请先登录该店铺'), 'executeListing')
+          throw new Error('请先登录该店铺')
         }
 
         const platformSelectors = loadPlatformSelectors(task.platform)
@@ -151,18 +142,26 @@ export class ProductListingService {
         this.emitProgress({ taskId, type: 'progress', progress: 10, message: '正在启动浏览器...' })
 
         const { chromium } = require('playwright')
-        const browser = await chromium.launch({ headless: settings.headlessBrowser })
+        const browser = await chromium.launch({ headless: DEFAULT_CONFIG.browserHeadless })
         const context = await browser.newContext({
           userDataDir: profilePath,
-          viewport: settings.browserViewport,
+          viewport: { width: 1280, height: 720 },
         })
         const page = await context.newPage()
 
         addLog('浏览器已启动')
 
-        const testUrl = platformSettings.testUrl
+        const testUrls = {
+          pinduoduo: 'https://mms.pinduoduo.com/goods/list',
+          douyin: 'https://creator.douyin.com/product/list',
+          taobao: 'https://upload.taobao.com/',
+          jd: 'https://seller.jd.com/商品管理',
+          kuaishou: 'https://cp.kwaixiandian.com/goods/list',
+        }
+
+        const testUrl = testUrls[task.platform as keyof typeof testUrls]
         addLog(`打开页面: ${testUrl}`)
-        await page.goto(testUrl, { waitUntil: 'domcontentloaded', timeout: settings.taskTimeout })
+        await page.goto(testUrl, { waitUntil: 'domcontentloaded', timeout: DEFAULT_CONFIG.timeout })
         await page.waitForTimeout(2000)
 
         this.emitProgress({ taskId, type: 'progress', progress: 20, message: '页面已加载' })
@@ -204,7 +203,7 @@ export class ProductListingService {
           this.emitProgress({ taskId, type: 'progress', progress: 60, message: '上传图片...' })
           addLog(`上传 ${validImages.length} 张图片`)
           const fileInput = page.locator(uploadImagesSelector.selector).locator('input[type="file"]').first()
-          const limitedImages = validImages.slice(0, platformSettings.upload.maxImages)
+          const limitedImages = validImages.slice(0, 9)
           await fileInput.setInputFiles(limitedImages)
           await page.waitForTimeout(3000)
         } else if (uploadMainImageSelector && validImages.length > 0) {
@@ -276,8 +275,7 @@ export class ProductListingService {
         return result
 
       } catch (error) {
-        const handled = errorHandler.handleError(error, 'executeListing')
-        const errorMsg = 'message' in handled ? handled.message : String(error)
+        const errorMsg = error instanceof Error ? error.message : String(error)
         addLog(`错误: ${errorMsg}`)
         throw { message: errorMsg, original: error }
       }
@@ -292,8 +290,8 @@ export class ProductListingService {
         ecommerceLogger.warn('ListingService', `第 ${attempt} 次尝试失败`, { taskId, error: lastError })
 
         if (attempt < maxAttempts && !taskState.cancelled) {
-          const delay = settings.retryDelay
-          addLog(`${settings.retryDelay / 1000}秒后重试...`)
+          const delay = DEFAULT_CONFIG.retryDelay
+          addLog(`${delay / 1000}秒后重试...`)
           await this.sleep(delay)
         }
       }
@@ -326,8 +324,7 @@ export class ProductListingService {
     }
   ): Promise<BatchExecutionState> {
     const batchId = `batch-${Date.now()}`
-    const settings = getEcommerceSettings()
-    const concurrent = options?.concurrent || settings.maxConcurrentTasks || 2
+    const concurrent = options?.concurrent || this.maxConcurrent
 
     const state: BatchExecutionState = {
       id: batchId,
@@ -345,7 +342,7 @@ export class ProductListingService {
         taskId: task.id,
         status: 'pending',
         attempts: 0,
-        maxAttempts: settings.retryAttempts,
+        maxAttempts: DEFAULT_CONFIG.maxRetries,
       })
     }
 
